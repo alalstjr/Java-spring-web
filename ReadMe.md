@@ -8,6 +8,8 @@
     - [1. MVC 코드 예제](#MVC-코드-예제)
 - [2. 서블릿 소개](#서블릿-소개)
     - [1. 서블릿 코드](#서블릿-코드)
+- [3. 스프링 IoC 컨테이너 연동](#스프링-IoC-컨테이너-연동)
+    - [1. DispatcherServlet](#DispatcherServlet)
 
 # 스프링 MVC
 
@@ -373,3 +375,141 @@ destroy
 Filter destroy
 Context Destroyed
 ~~~
+
+# 스프링 IoC 컨테이너 연동
+
+> web.xml
+
+~~~
+<listener>
+<listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+</listener>
+~~~
+
+Spring IOC 컨테이너 즉 에플리케이션 컨텍스트를 서블릿 생명주기에 맞춰서 바인딩 해줍니다. 
+에플리케이션 컨텍스트를 만들려면 Spring 설정파일이 필요합니다.
+
+- 서블릿 애플리케이션에 스프링 연동하기
+    - 서블릿에서 스프링이 제공하는 IoC 컨테이너 활용하는 방법
+    - 스프링이 제공하는 서블릿 구현체 DispatcherServlet 사용하기
+
+- ContextLoaderListener
+    - 서블릿 리스너 구현체
+    - ApplicationContext를 만들어 준다.
+    - ApplicationContext를 서블릿 컨텍스트 라이프사이클에 따라 등록하고 소멸시켜준다.
+    - 서블릿에서 IoC 컨테이너를 ServletContext를 통해 꺼내 사용할 수 있다.
+
+> AppConfig.class
+
+~~~
+@Configuration
+@ComponentScan
+public class AppConfig { }
+~~~
+
+자바 설정파일
+
+> HelloService.class
+
+~~~
+@Service
+public class HelloService {
+
+    public String getName() {
+        return "jjunpro";
+    }
+}
+~~~
+
+서블릿 컨텍스트에 등록할 Bean 클레스
+
+> web.xml
+
+~~~
+  Spring IOC 컨테이너 즉 에플리케이션 컨텍스트를 서블릿 생명주기에 맞춰서 바인딩 해줍니다.
+
+  ContextLoaderListener 사용하는 params 들이 존재합니다.
+  컨텍스트의 설정파일 위치, 에플리케이션 컨텍스트의 타입지정 등등..
+
+  contextClass & contextConfigLocation 두개를 활용해서 ContextLoaderListener 가 AnnotationConfigWebApplicationContext (ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE) 를 만듭니다.
+  만들어진 웹 에플리케이션 컨텍스트 내부에는 HelloService 가 Bean 으로 들어있게 됩니다.
+
+  그러면 서블릿에서 에플리케이션을 통해서 HelloService 를 꺼내서 사용할 수 있습니다.
+
+  context 설정은 다른 필터보다 위에 위치해야 합니다.
+
+  <context-param>
+    <param-name>contextClass</param-name>
+    <param-value>org.springframework.web.context.support.AnnotationConfigWebApplicationContext</param-value>
+  </context-param>
+
+  Java 설정파일 등
+
+  <context-param>
+    <param-name>contextConfigLocation</param-name>
+    <param-value>me.whiteship.AppConfig</param-value>
+  </context-param>
+
+  웹 에플리케이션 컨텍스트를 서블릿 컨텍스트에 등록해주는 리스너
+  서블릿 컨텍스트 란 모든 서블릿들이 사용할 수 있는 공용 저장소
+
+  <listener>
+    <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+  </listener>
+~~~
+
+> ContextLoaderListener.class
+
+~~~
+서블릿 컨텍스트가 생성되는 시점에 웹 에플리케이션을 생성해서 서블릿 컨텍스트에 등록되는 과정이
+initWebApplicationContext() 메소드에서 일어나게 됩니다.
+
+public void contextInitialized(ServletContextEvent event) {
+    this.initWebApplicationContext(event.getServletContext());
+}
+~~~
+
+> HelloServlet.class
+
+~~~
+@Override
+protected void doGet(HttpServletRequest req, HttpServletResponse resp)
+        throws ServletException, IOException {
+    System.out.println("doGet");
+
+    ApplicationContext attribute = (ApplicationContext) getServletContext()
+            .getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
+    HelloService bean = attribute.getBean(HelloService.class);
+
+    resp.getWriter().println("<html>");
+    resp.getWriter().println("<h1>서블릿 에플리케이션 컨텍스 " + bean.getName() + " </h1>");
+    resp.getWriter().println("</html>");
+}
+~~~
+
+## DispatcherServlet
+
+서블릿 컨텍스트를 만들며 요청을 처리할 때마다 서블릿을 하나씩 만들 때 `공통으로 사용하고싶은 부분은 Front Controller 디자인 패턴`으로 해결합니다.
+
+Front Controller 는 `모든 요청을 하나의 컨트롤러에서 받아서 처리`하는 것입니다.
+Front Controller 에서 해당 요청을 처리할 `핸들러들한테 분배`를 하는것 이를 `(디스패치)` 라고 합니다.
+
+이를 스프링에서 핵심이되는 클래스 `스프링이 제공하는 서블릿 구현체 DispatcherServlet` 입니다.
+
+DispatcherServlet 은 서블릿 컨텍스트에 등록되어 있는 (ROOT) 웹 에플리케이션을 상속받는 `(서블릿) 웹 에플리케이션을 하나 더 생성`합니다.
+
+상속관계로 해서 생성하는 이유
+
+서블릿 컨텍스트(ContextLoaderListener) 에서 만든 웹 에플리케이션 컨텍스트는 여러 다른 서블릿에서도 공용해서 사용할 수 있습니다.
+(ROOT) 웹 에플리케이션은 다른 서블릿도 공용으로 사용할 수 있습니다.
+
+DispatcherServlet 내부에서 만든 에플리케이션은 `해당 DispatcherServlet 내부에서만 사용이 가능`합니다.
+
+혹시라도 DispatcherServlet 을 여러개를 만드는 경우 `여러 DispatcherServlet 들이 서로 공용으로 써야하는 Bean 존재하는 경우를 커버`하기 위해서
+`상속구조`를 만들 수 있게 되어있는 것입니다.
+
+(ROOT) 웹 에플리케이션 내부에는 Web 과 관련된 Bean 들이 존재하지 않습니다.
+이유는 `Service & Repository 는 다른 DispatcherServlet 에서도 공용으로 사용할 수 있는 Bean` 이라서 그렇습니다.
+
+DispatcherServlet 에서 만드는 (서블릿) 웹 에플리케이션은 웹과 관련된 Bean들이 등록이 되어있습니다.
+`Controller & ViewResolver & HandlerMapping 이러한 Bean들은 해당 DispatcherServlet 에서만 한정적`입니다.
