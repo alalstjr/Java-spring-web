@@ -30,7 +30,7 @@
 
   <!--
     웹 에플리케이션 컨텍스트를 서블릿 컨텍스트에 등록해주는 리스너
-    서블릿 컨텍스트 란 모든 서블릿들이 사용할 수 있는 공용 저장소
+    서블릿 컨텍스트 란 모든 서블릿들이 사용할 수 있는 공용 저장
   -->
   <listener>
     <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
@@ -57,6 +57,25 @@
   <servlet-mapping>
     <servlet-name>hello</servlet-name>
     <url-pattern>/hello</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>app</servlet-name>
+    <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+    <!-- WebConfig 설정을 사용해서 AnnotationConfigWebApplicationContext 에플리케이션을 만들도록 설정 -->
+    <init-param>
+      <param-name>contextClass</param-name>
+      <param-value>org.springframework.web.context.support.AnnotationConfigWebApplicationContext</param-value>
+    </init-param>
+    <init-param>
+      <param-name>contextConfigLocation</param-name>
+      <param-value>me.whiteship.WebConfig</param-value>
+    </init-param>
+  </servlet>
+
+  <servlet-mapping>
+    <servlet-name>app</servlet-name>
+    <url-pattern>/app/*</url-pattern>
   </servlet-mapping>
 
 </web-app>

@@ -496,20 +496,127 @@ Front Controller 에서 해당 요청을 처리할 `핸들러들한테 분배`�
 
 이를 스프링에서 핵심이되는 클래스 `스프링이 제공하는 서블릿 구현체 DispatcherServlet` 입니다.
 
-DispatcherServlet 은 서블릿 컨텍스트에 등록되어 있는 (ROOT) 웹 에플리케이션을 상속받는 `(서블릿) 웹 에플리케이션을 하나 더 생성`합니다.
+DispatcherServlet 은 서블릿 컨텍스트에 등록되어 있는 (Root) 웹 에플리케이션을 상속받는 `(서블릿) 웹 에플리케이션을 하나 더 생성`합니다.
 
 상속관계로 해서 생성하는 이유
 
 서블릿 컨텍스트(ContextLoaderListener) 에서 만든 웹 에플리케이션 컨텍스트는 여러 다른 서블릿에서도 공용해서 사용할 수 있습니다.
-(ROOT) 웹 에플리케이션은 다른 서블릿도 공용으로 사용할 수 있습니다.
+(Root) 웹 에플리케이션은 다른 서블릿도 공용으로 사용할 수 있습니다.
 
 DispatcherServlet 내부에서 만든 에플리케이션은 `해당 DispatcherServlet 내부에서만 사용이 가능`합니다.
 
 혹시라도 DispatcherServlet 을 여러개를 만드는 경우 `여러 DispatcherServlet 들이 서로 공용으로 써야하는 Bean 존재하는 경우를 커버`하기 위해서
 `상속구조`를 만들 수 있게 되어있는 것입니다.
 
-(ROOT) 웹 에플리케이션 내부에는 Web 과 관련된 Bean 들이 존재하지 않습니다.
+(Root) 웹 에플리케이션 내부에는 Web 과 관련된 Bean 들이 존재하지 않습니다.
 이유는 `Service & Repository 는 다른 DispatcherServlet 에서도 공용으로 사용할 수 있는 Bean` 이라서 그렇습니다.
 
 DispatcherServlet 에서 만드는 (서블릿) 웹 에플리케이션은 웹과 관련된 Bean들이 등록이 되어있습니다.
 `Controller & ViewResolver & HandlerMapping 이러한 Bean들은 해당 DispatcherServlet 에서만 한정적`입니다.
+
+# DispatcherServlet 동작 원리
+
+> HelloController.class
+
+~~~
+@RestController
+public class HelloController {
+
+    private final HelloService helloService;
+
+    public HelloController(HelloService helloService) {
+        this.helloService = helloService;
+    }
+
+    @GetMapping("/hello")
+    public String hello() {
+        return helloService.getName();
+    }
+}
+~~~
+
+HelloController.class 를 사용할 수 있도록 DispatcherServlet 사용하여 등록합니다.
+
+Controller 는 DispatcherServlet 이 만드는 에플리케이션에 등록이 되어야 하며
+
+> AppConfig.class
+
+~~~
+@Configuration
+@ComponentScan(excludeFilters = @ComponentScan.Filter(Controller.class))
+public class AppConfig { }
+~~~
+
+(Root) 웹 에플리케이션 에서는 Controller 를 Bean 으로 등록하지 않겠다. 
+
+> WebConfig.class
+
+~~~
+@Configuration
+@ComponentScan(useDefaultFilters = false, includeFilters = @ComponentScan.Filter(Controller.class))
+public class WebConfig { }
+~~~
+
+Controller 만 Bean 으로 등록하겠다.
+
+> web.xml
+
+~~~
+  <context-param>
+    <param-name>contextClass</param-name>
+    <param-value>org.springframework.web.context.support.AnnotationConfigWebApplicationContext</param-value>
+  </context-param>
+  <context-param>
+    <param-name>contextConfigLocation</param-name>
+    <param-value>me.whiteship.AppConfig</param-value>
+  </context-param>
+  <listener>
+    <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+  </listener>
+
+=================================================================================================== 
+
+  <servlet>
+    <servlet-name>app</servlet-name>
+    <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+    
+    WebConfig 설정을 사용해서 AnnotationConfigWebApplicationContext 에플리케이션을 만들도록 설정 contextClass 를 변경합니다.
+
+    <init-param>
+      <param-name>contextClass</param-name>
+      <param-value>org.springframework.web.context.support.AnnotationConfigWebApplicationContext</param-value>
+    </init-param>
+    <init-param>
+      <param-name>contextConfigLocation</param-name>
+      <param-value>me.whiteship.WebConfig</param-value>
+    </init-param>
+  </servlet>
+
+  app 서블릿이 "/app/*" 경로로 들어오는 모든 요청을 DispatcherServlet가 처리하겠다고 명시합니다.
+
+  <servlet-mapping>
+    <servlet-name>app</servlet-name>
+    <url-pattern>/app/*</url-pattern>
+  </servlet-mapping>
+~~~
+
+`Controller` 는 DispatcherServlet 에서 만들어주는 AnnotationConfigWebApplicationContext `내부에 WebConfig 으로 등록`이 되어 있습니다.
+`DispatcherServlet` 는 현재 서블릿 컨텍스트에 들어있는 ContextLoaderListener 만들어준 `AnnotationConfigWebApplicationContext 를 부모로 사용`합니다.
+부모로 사용한 `AnnotationConfigWebApplicationContext 는 AppConfig 를 통해서 만들어 집니다.`
+`AppConfig` 는 Controller 이외의 모든 Bean 들이 들어있으니 `Service 가 등록`되어 있습니다.
+
+"/app/*" `요청으로 들어오면` DispatcherServlet 이 요청을 처리할 `Controller 찾아서 디스패치` 해줍니다.
+
+요약하면
+
+- Servlet WebApplicationContext 
+    - Controller 
+    - ViewResolver 
+    - HandlerMapping
+
+- Root WebApplicationContext
+    - Service
+    - Repository
+
+> Servlet WebApplicationContext -> Root WebApplicationContext
+
