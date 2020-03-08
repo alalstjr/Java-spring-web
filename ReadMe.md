@@ -10,6 +10,12 @@
     - [1. 서블릿 코드](#서블릿-코드)
 - [3. 스프링 IoC 컨테이너 연동](#스프링-IoC-컨테이너-연동)
     - [1. DispatcherServlet](#DispatcherServlet)
+- [4. DispatcherServlet 동작 원리](#DispatcherServlet-동작-원리)
+- [5. DispatcherServlet](#DispatcherServlet)
+  - [1. DispatcherServlet View 존재하는 경우](#DispatcherServlet-View-존재하는-경우)
+  - [2. 다른방식의 등록](#다른방식의-등록)
+- [6. 커스텀 ViewResolver 등록](#커스텀-ViewResolver-등록)
+  - [1. ViewResolver Bean 등록해서 사용해보기](#ViewResolver-Bean-등록해서-사용해보기)
 
 # 스프링 MVC
 
@@ -620,3 +626,237 @@ Controller 만 Bean 으로 등록하겠다.
 
 > Servlet WebApplicationContext -> Root WebApplicationContext
 
+# DispatcherServlet
+
+- DispatcherServlet 초기화
+  - 다음의 특별한 타입의 빈들을 찾거나, 기본 전략에 해당하는 빈들을 등록한다.
+  - HandlerMapping: 핸들러를 찾아주는 인터페이스
+  - HandlerAdapter: 핸들러를 실행하는 인터페이스
+  - HandlerExceptionResolver
+  - ViewResolver
+  - ...
+
+- DispatcherServlet 동작 순서
+  - 1. 요청을 분석한다. (로케일, 테마, 멀티파트 등)
+  - 2. (핸들러 맵핑에게 위임하여) 요청을 처리할 핸들러를 찾는다.
+  - 3. (등록되어 있는 핸들러 어댑터 중에) 해당 핸들러를 실행할 수 있는 “핸들러 어댑터”를 찾는다.
+  - 4. 찾아낸 “핸들러 어댑터”를 사용해서 핸들러의 응답을 처리한다.
+    - 핸들러의 리턴값을 보고 어떻게 처리할지 판단한다.
+      - 뷰 이름에 해당하는 뷰를 찾아서 모델 데이터를 랜더링한다.
+      - @ResponseEntity가 있다면 Converter를 사용해서 응답 본문을 만들고.
+  - 5. (부가적으로) 예외가 발생했다면, 예외 처리 핸들러에 요청 처리를 위임한다.
+  - 6. 최종적으로 응답을 보낸다.
+- HandlerMapping
+  - RequestMappingHandlerMapping
+- HandlerAdapter
+  - RequestMappingHandlerAdapter
+
+> DispatcherServlet.class
+
+~~~
+디버그 > protected void doService(HttpServletRequest request, HttpServletResponse response) throws Exception { ... }
+
+...
+
+디버그 into > this.doDispatch(request, response);
+
+... 
+
+protected void doDispatch(HttpServletRequest request, HttpServletResponse response) throws Exception {
+  ...
+  디버그 into > mappedHandler = this.getHandler(processedRequest);
+    if (mappedHandler == null) {
+        this.noHandlerFound(processedRequest, response);
+        return;
+    }
+  }
+
+  protected HandlerExecutionChain getHandler(HttpServletRequest request) throws Exception {
+    if (this.handlerMappings != null) {
+      ...
+      while(var2.hasNext()) {
+          HandlerMapping mapping = (HandlerMapping)var2.next();
+          HandlerExecutionChain handler = mapping.getHandler(request);
+          if (handler != null) {
+              return handler;
+          }
+      }
+    }
+  }
+
+  HandlerAdapter ha = this.getHandlerAdapter(mappedHandler.getHandler());
+
+  protected HandlerAdapter getHandlerAdapter(Object handler) throws ServletException {
+    if (this.handlerAdapters != null) {
+        Iterator var2 = this.handlerAdapters.iterator();
+
+        while(var2.hasNext()) {
+            HandlerAdapter adapter = (HandlerAdapter)var2.next();
+            if (adapter.supports(handler)) {
+                return adapter;
+            }
+        }
+    }
+    ...
+  }
+
+  디버그 into > mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+}
+~~~
+
+doDispatch 메소드에서는 요청이 멀티파트인지, 로케일은 어떤것인지 등등 을 판단합니다.
+
+getHandler() : processedRequest 요청을 처리할 수 있는 핸들러를 찾아오는 메소드입니다.
+DispatcherServlet 이 들고있는 여러개의 핸들러 맵핑 중에서 RequestMappingHandlerMapping 사용하여 핸들러를 찾아옵니다.
+핸들러를 찾은경우 getHandlerAdapter() 메소드로 핸들러를 실행시켜줍니다.
+
+핸들러를 찾았고 핸들러를 실행시켜주는 어뎁터도 찾았습니다.
+
+handle() 핸들러 어뎁터를 가지고 요청을 처리하는 메소드 
+
+AbstractHandlerMethodAdapter -> RequestMappingHandlerAdapter
+
+> RequestMappingHandlerAdapter.class
+
+~~~
+...
+mav = this.invokeHandlerMethod(request, response, handlerMethod);
+~~~
+
+핸들러 메소드를 invoke 하게 됩니다.
+즉 Java 리플렉션을 사용해서 HelloController 의 hello() 핸들러를 실행하게 됩니다.
+handlerMethod 라는 객체 내부에는 해당 핸들러의 정보가 들어있습니다.
+
+실행을 하면 결과같은 문자열로 반환됩니다.
+
+## DispatcherServlet View 존재하는 경우
+
+~~~
+@Controller
+public class SampleController {
+
+    @GetMapping("/sample")
+    public String sample() {
+        return "WEB-INF/sample.jsp";
+    }
+}
+~~~
+
+이전의 ResponseBody 사용한 리턴이 아닌 문자열만 리턴입니다.
+
+이경우는 모댈,View 값이 null 이 아닙니다.
+
+> DispatcherServlet.class
+
+~~~
+디버그 > mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+~~~
+
+mv : ModelAndView [view="/WEB-INF/sample.jsp"; model={}]
+
+ModelAndView 값을 가지고있습니다.
+
+이제 View의 객체를 탐색하여 모델객체에 넣어 리스폰스 응답해줍니다.
+
+## 다른방식의 등록
+
+> SimpleController.class
+
+~~~
+@org.springframework.stereotype.Controller("/simple")
+public class SimpleController implements Controller {
+
+    @Override
+    public ModelAndView handleRequest(HttpServletRequest httpServletRequest,
+            HttpServletResponse httpServletResponse) throws Exception {
+        return new ModelAndView("/WEB-INF/simple.jsp");
+    }
+}
+~~~
+
+핸들러는 "org.springframework.web.servlet.handler.BeanNameUrlHandlerMapping" 으로 실행됩니다.
+
+어노테이션 기반의 핸들러가 아니라서 이경우 핸들러 어뎁터도 변경됩니다 simplecontrollerhandleradapter 으로 인해서 실행되게 됩니다.
+
+# 커스텀 ViewResolver 등록
+
+> DispatcherServlet.class
+
+~~~
+protected void initStrategies(ApplicationContext context) {
+  ...
+  this.initViewResolvers(context);
+}
+
+private void initViewResolvers(ApplicationContext context) {
+  Map<String, ViewResolver> matchingBeans = BeanFactoryUtils.beansOfTypeIncludingAncestors(context, ViewResolver.class, true, false);
+  if (!matchingBeans.isEmpty()) {
+      this.viewResolvers = new ArrayList(matchingBeans.values());
+      AnnotationAwareOrderComparator.sort(this.viewResolvers);
+  }
+}
+~~~
+
+ViewResolver.class 정보를 찾아서 Bean 정보를 this.viewResolvers 목록에 넣어둡니다.
+
+~~~
+if (this.viewResolvers == null) {
+    this.viewResolvers = this.getDefaultStrategies(context, ViewResolver.class);
+}
+~~~
+
+하지만 직접 Bean 으로 등록한것이 없다면 기본전략을 가져옵니다.
+
+initHandlerMappings 동일하게 진행됩니다.
+
+~~~
+private void initHandlerMappings(ApplicationContext context) {
+
+    if (this.detectAllHandlerMappings) {
+        Map<String, HandlerMapping> matchingBeans = BeanFactoryUtils.beansOfTypeIncludingAncestors(context, HandlerMapping.class, true, false);
+        if (!matchingBeans.isEmpty()) {
+            this.handlerMappings = new ArrayList(matchingBeans.values());
+            AnnotationAwareOrderComparator.sort(this.handlerMappings);
+        }
+    } else {
+      ...
+      HandlerMapping hm = (HandlerMapping)context.getBean("handlerMapping", HandlerMapping.class);
+    }
+}
+~~~
+
+HandlerMapping.class 타입의 Bean을 전부 찾아서 this.handlerMappings 목록에 넣습니다.
+
+여기서 조건문인 detectAllHandlerMappings 값은 전부다 찾아서 쓸건지의 플레그가 존재하며 기본값은 true 입니다.
+
+만약 false 인경우 특정 Bean 만 탐색하도록 설정할 수도 있습니다.
+성능 최적화를 위해서 사용할 수도 있습니다.
+
+## ViewResolver Bean 등록해서 사용해보기
+
+~~~
+@Configuration
+public class WebConfig {
+
+    @Bean
+    public ViewResolver viewResolver() {
+        InternalResourceViewResolver viewResolver = new InternalResourceViewResolver();
+        viewResolver.setPrefix("/WEB-INF/");
+        viewResolver.setSuffix(".jsp");
+
+        return viewResolver;
+    }
+}
+~~~
+
+InternalResourceViewResolver 설정을 하면 Controller 에서 return 값을 간결하게 사용할 수 있습니다.
+return new ModelAndView("/WEB-INF/simple.jsp"); -> return new ModelAndView("simple");
+
+~~~
+private void initViewResolvers(ApplicationContext context) {
+디버그 > this.viewResolvers = null;
+~~~
+
+this.viewResolvers 저장된 값을 보면 prefix, suffix 설정된 값이 정상적으로 적용되는 것을 확인 할 수 있습니다.
+
+viewResolvers 값이 존재하므로 기본 viewResolver 는 적용되지 않습니다.
