@@ -16,6 +16,9 @@
   - [2. 다른방식의 등록](#다른방식의-등록)
 - [6. 커스텀 ViewResolver 등록](#커스텀-ViewResolver-등록)
   - [1. ViewResolver Bean 등록해서 사용해보기](#ViewResolver-Bean-등록해서-사용해보기)
+- [7. 스프링 MVC 구성 요소](#스프링-MVC-구성-요소)
+- [8. 스프링 MVC 동작 원리](#스프링-MVC-동작-원리)
+  - [1. web xml 설정없이 DispatcherServlet](#web-xml-설정없이-DispatcherServlet)
 
 # 스프링 MVC
 
@@ -860,3 +863,91 @@ private void initViewResolvers(ApplicationContext context) {
 this.viewResolvers 저장된 값을 보면 prefix, suffix 설정된 값이 정상적으로 적용되는 것을 확인 할 수 있습니다.
 
 viewResolvers 값이 존재하므로 기본 viewResolver 는 적용되지 않습니다.
+
+# 스프링 MVC 구성 요소
+
+- DispatcherSerlvet의 기본 전략
+  - DispatcherServlet.properties
+
+- MultipartResolver
+  - `파일 업로드 요청 처리에 필요한 인터페이스`
+  - HttpServletRequest를 MultipartHttpServletRequest로 변환해주어 요청이 담고 있는 File을 꺼낼 수 있는 API 제공.
+
+- LocaleResolver
+  - `클라이언트의 위치(Locale) 정보를 파악하는 인터페이스` 요청이 어느지역에서 온것인지 지역정보를 확인할 때 사용합니다.
+  - 기본 전략은 요청의 accept-language를 보고 판단.
+  - 요청이 DispatcherServlet 내부에 들어왔을 때 분석하는 단계에서 사용됩니다. 
+
+- ThemeResolver
+  - 애플리케이션에 `설정된 테마를 파악하고 변경할 수 있는 인터페이스` css 설정을 감지하고 변경하는 뜻
+  - 참고: https://memorynotfound.com/spring-mvc-theme-switcher-example 
+
+- HandlerMapping
+  - `요청을 처리할 핸들러를 찾는 인터페이스`
+  - DispatcherServlet.properties
+    - BeanNameUrlHandlerMapping : @Controller("/simple") Bean 이름 정보로 핸들러를 찾아주는 맵핑
+    - RequestMappingHandlerMapping : 어노테이션 기반의 정보로 핸들러를 찾아주는 맵핑
+
+- HandlerAdapter
+  - `HandlerMapping이 찾아낸 “핸들러”를 처리하는 인터페이스`
+  - 스프링 MVC 확장력의 핵심
+
+- HandlerExceptionResolver
+  - `요청 처리 중에 발생한 에러 처리하는 인터페이스`
+
+- RequestToViewNameTranslator
+  - `핸들러에서 뷰 이름을 명시적으로 리턴하지 않은 경우`, 요청을 기반으로 뷰 이름을 판단하는 인터페이스
+
+- ViewResolver
+  - 뷰 이름(string)에 해당하는 뷰를 찾아내는 인터페이스
+
+- FlashMapManager
+  - FlashMap 인스턴스를 가져오고 저장하는 인터페이스
+  - FlashMap은 주로 리다이렉션을 사용할 때 요청 매개변수를 사용하지 않고 데이터를 전달하고 정리할 때 사용한다.
+  - redirect:/events
+
+# 스프링 MVC 동작 원리
+
+결국엔 (굉장히 복잡한) 서블릿. = DispatcherServlet
+
+- DispatcherServlet 초기화
+  - 1. 특정 타입에 해당하는 빈을 찾는다.
+  - 2. 없으면 기본 전략을 사용한다. (DispatcherServlet.properties)
+
+- 스프링 부트 사용하지 않는 스프링 MVC
+  - 서블릿 컨네이너(ex, 톰캣)에 등록한 웹 애플리케이션(WAR)에 DispatcherServlet을 등록한다.
+    - web.xml에 서블릿 등록
+    - 또는 WebApplicationInitializer에 자바 코드로 서블릿 등록 (스프링 3.1+, 서블릿 3.0+)
+  - 세부 구성 요소는 빈 설정하기 나름.
+
+- 스프링 부트를 사용하는 스프링 MVC
+  - 자바 애플리케이션에 내장 톰캣을 만들고 그 안에 DispatcherServlet을 등록한다.
+    - 스프링 부트 자동 설정이 자동으로 해줌.
+  - 스프링 부트의 주관에 따라 여러 인터페이스 구현체를 빈으로 등록한다.
+
+## web xml 설정없이 DispatcherServlet 
+
+web.xml 설정없이 웹 애플리케이션 만들기
+
+WebApplicationInitializer 인터페이스를 활용합니다.
+
+> WebApplication.class
+
+~~~
+public class WebApplication implements WebApplicationInitializer {
+
+    @Override
+    public void onStartup(ServletContext servletContext) throws ServletException {
+        AnnotationConfigWebApplicationContext applicationContext = new AnnotationConfigWebApplicationContext();
+        /* 애플리케이션 컨텍스트 설정을 등록합니다. */
+        applicationContext.register(WebConfig.class);
+        applicationContext.refresh();
+
+        /* DispatcherServlet 생성 */
+        DispatcherServlet dispatcherServlet = new DispatcherServlet();
+        Dynamic           app               = servletContext.addServlet("app", dispatcherServlet);
+        /* app 이하의 모든요청을 맵핑합니다. */
+        app.addMapping("/app/*");
+    }
+}
+~~~
