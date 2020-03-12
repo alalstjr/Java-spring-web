@@ -23,6 +23,12 @@
   - [1. 디버깅](#디버깅)
 - [10. @EnableWebMvc 어노테이션 사용시 설정 추가 방법 (WebMvcConfigurer Interface)](#@EnableWebMvc-어노테이션-사용시-설정-추가-방법-(WebMvcConfigurer-Interface))  
 - [11. 스프링 부트의 스프링 MVC 설정](#스프링-부트의-스프링-MVC-설정)
+- [12. 스프링 부트 JSP](#스프링-부트-JSP)
+  - [1. WAR 파일 배포하기](#WAR-파일-배포하기)
+- [13. 도메인 클래스 컨버터](#도메인-클래스-컨버터)
+- [14. 핸들러 인터셉터](#핸들러-인터셉터)
+  - [1. 핸들러 인터셉터 구현](#핸들러-인터셉터-구현)
+- [15. 리소스 핸들러](#리소스-핸들러)
 
 # 스프링 MVC
 
@@ -1253,3 +1259,347 @@ public class WebMvcAutoConfiguration {
   - Spring Boot 가 지원하는 MVC 자동설정을 사용하지 않으려면?
   - @Configuration + @EnableWebMvc + Imlements WebMvcConfigurer 를 사용하면 커스텀 가능합니다.
 
+# 스프링 부트 JSP
+
+- “If possible, JSPs should be avoided. There are several known limitations when using
+them with embedded servlet containers.”
+  - https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#boot-features-spring-mvc-template-engines
+
+- 제약 사항
+  - JAR 프로젝트로 만들 수 없음, WAR 프로젝트로 만들어야 함
+  - Java -JAR로 실행할 수는 있지만 “실행가능한 JAR 파일”은 지원하지 않음
+  - 언더토우(JBoss에서 만든 서블릿 컨테이너)는 JSP를 지원하지 않음
+  - Whitelabel 에러 페이지를 error.jsp로 오버라이딩 할 수 없음.
+
+- 참고
+  - https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#boot-features-jsp-limitations
+  - https://github.com/spring-projects/spring-boot/tree/v2.1.1.RELEASE/spring-boot-samples/spring-boot-sample-web-jsp (샘플 프로젝트)
+
+War 프로젝트로 패키징을 만들면 SpringBootServletInitializer 를 상속받는 클레스가 하나 더 생성되어 있습니다.
+SpringBootServletInitializer는 웹 에플리케이션을 패키징 한다음에 독립적인 Jar 파일로 실행은 가능합니다.
+하지만 War 파일이기 때문에 웹서버(톰켓)에 배포할 수도 있습니다.
+
+- 독립적인 War 파일로 실행을 할 때는 기본 @SpringBootApplication 클래스로 실행을 합니다.
+- 톰켓이나 서블릿 엔진에 배포를 하는 형태인 경우 SpringBootServletInitializer 으로 실행을 합니다.
+
+> Event.class
+
+~~~
+public class Event {
+    private String name;
+    private LocalDateTime starts;
+
+    // Getter, Setter
+}
+~~~
+
+> EventController.class
+
+~~~
+@Controller
+public class EventController {
+
+    @GetMapping("/events")
+    public String getEvents(Model model) {
+        Event event1 = new Event();
+        event1.setName("스프링 MVC 1");
+        event1.setStarts(LocalDateTime.of(2020, 1, 1, 1, 1));
+
+        Event event2 = new Event();
+        event2.setName("스프링 MVC 2");
+        event2.setStarts(LocalDateTime.of(2020, 2, 2, 2, 2));
+
+        List<Event> eventList = List.of(event1, event2);
+
+        model.addAttribute("events", eventList);
+        model.addAttribute("message", "Hello~!");
+
+        return "events/list";
+    }
+}
+~~~
+
+> main/webapp/WEB-INF/jsp/events/list.jsp
+
+~~~
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<html>
+<head>
+    <title>Title</title>
+</head>
+<body>
+    <h1>이벤트 목록</h1>
+    <h4>${message}</h4>
+    <table>
+        <tr>
+            <th>이름</th>
+            <th>시작</th>
+        </tr>
+        <c:forEach items="${events}" var="event">
+            <tr>
+                <td>${event.name}</td>
+                <td>${event.starts}</td>
+            </tr>
+        </c:forEach>
+    </table>
+</body>
+</html>
+~~~
+
+<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %> 추가하여 jstl 사용할 수 있도록 합니다.
+
+> application.properties
+
+~~~
+spring.mvc.view.prefix=/WEB-INF/jsp/
+spring.mvc.view.suffix=.jsp
+~~~
+
+mvc view 기본설정을 해줍니다.
+
+War 패키징 후 명령어 java -jar 로 실행해주면 동일하게 실행됩니다.
+
+## WAR 파일 배포하기
+
+java -jar를 사용해서 실행한 경우
+
+- SpringApplication.run 사용하기
+
+(Embedded Tomcat) DispatcherServlet -> Spring IOC Container
+
+- SpringBootServletInitializer (WebApplicationInitializer) 사용하기
+
+Servlet Container (Tomcat, Jetty) -> Web Application aRchive (WAR) -> DispatcherServlet -> Spring IOC Container
+
+# 도메인 클래스 컨버터
+
+- 스프링 데이터 JPA는 스프링 MVC용 도메인 클래스 컨버터를 제공합니다.
+- 도메인 클래스 컨버터
+  - 스프링 데이터 JPA가 제공하는 Repository를 사용해서 ID에 해당하는 엔티티를 읽어옵니다.
+
+> SampleControllerTest.class
+
+~~~
+@RunWith(SpringRunner.class)
+@WebMvcTest
+public class SampleControllerTest {
+
+    @Autowired
+    MockMvc mockMvc;
+
+    @Test
+    public void hello() throws Exception {
+        mockMvc
+                .perform(
+                        get("/hello")
+                        .param("id", "1")
+                )
+                .andExpect(content().string("hello"))
+                .andDo(print());
+    }
+}
+~~~
+
+param 의 id 값에 해당하는 Person 객체의 이름이 출력되면 됩니다.
+
+> SampleController.class
+
+~~~
+@RestController
+public class SampleController {
+
+    @GetMapping("/hello")
+    public String hello(@RequestParam("id") Person person) {
+
+        return "hello" + person.getName();
+    }
+}
+~~~
+
+> PersonRepository.class
+
+~~~
+public interface PersonRepository extends JpaRepository<Person, Long> { }
+~~~
+
+# 핸들러 인터셉터
+
+- https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/servlet/config/annotation/WebMvcConfigurerhtml#addInterceptors-org.springframework.web.servlet.config.annotation.InterceptorRegistry-
+
+- HandlerInterceptor
+  - 핸들러 맵핑에 설정할 수 있는 인터셉터
+  - 핸들러를 실행하기 전, 후(아직 랜더링 전) 그리고 완료(랜더링까지 끝난 이후) 시점에 부가 작업을 하고 싶은 경우에 사용할 수 있다.
+  - 여러 핸들러에서 반복적으로 사용하는 코드를 줄이고 싶을 때 사용할 수 있다.
+    - 로깅, 인증 체크, Locale 변경 등...
+
+- boolean preHandle(request, response, handler)
+  - 핸들러 실행하기 전에 호출 됨
+  - “핸들러"에 대한 정보를 사용할 수 있기 때문에 서블릿 필터에 비해 보다 세밀한 로직을 구현할 수 있다.
+  - 리턴값으로 계속 다음 인터셉터 또는 핸들러로 요청,응답을 전달할지(true) 응답 처리가 이곳에서 끝났는지(false) 알린다.
+
+- void postHandle(request, response, modelAndView)
+  - 핸들러 실행이 끝나고 아직 뷰를 랜더링 하기 이전에 호출 됨
+  - “뷰"에 전달할 추가적이거나 여러 핸들러에 공통적인 모델 정보를 담는데 사용할 수도 있다.
+  - 이 메소드는 인터셉터 역순으로 호출된다.
+  - 비동기적인 요청 처리 시에는 호출되지 않는다.
+
+- void afterCompletion(request, response, handler, ex)
+  - 요청 처리가 완전히 끝난 뒤(뷰 랜더링 끝난 뒤)에 호출 됨
+  - preHandler에서 true를 리턴한 경우에만 호출 됨
+  - 이 메소드는 인터셉터 역순으로 호출된다.
+  - 비동기적인 요청 처리 시에는 호출되지 않는다.
+
+- vs 서블릿 필터
+  - 서블릿 보다 구체적인 처리가 가능하다.
+  - 서블릿은 보다 일반적인 용도의 기능을 구현하는데 사용하는게 좋다.
+
+- 참고:
+  - https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/servlet/HandlerInterceptor.html
+  - https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/servlet/AsyncHandlerInterceptor.html
+
+## 핸들러 인터셉터 구현
+
+> GreetingInterceptor.class
+
+~~~
+public class GreetingInterceptor implements HandlerInterceptor {
+
+    /**
+     * return 값을 true 하여 다음으로 요청 처리를 하도록 설정합니다.
+     * */
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
+            Object handler) throws Exception {
+        System.out.println("preHandle 1");
+
+        return true;
+    }
+
+    @Override
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler,
+            ModelAndView modelAndView) throws Exception {
+        System.out.println("postHandle 1");
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
+            Object handler, Exception ex) throws Exception {
+        System.out.println("afterCompletion 1");
+    }
+}
+~~~
+
+> AnotherInterceptor.class
+
+~~~
+public class AnotherInterceptor implements HandlerInterceptor {
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
+            Object handler) throws Exception {
+        System.out.println("preHandle 2");
+
+        return true;
+    }
+
+    @Override
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler,
+            ModelAndView modelAndView) throws Exception {
+        System.out.println("postHandle 2");
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
+            Object handler, Exception ex) throws Exception {
+        System.out.println("afterCompletion 2");
+    }
+}
+~~~
+
+인터셉터 설정 등록은 WebMvcConfigurer 에서 가능합니다.
+
+> WebConfig.class
+
+~~~
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+
+    /**
+     * Order 순서값을 주지않으면 등록 순서대로 진행합니다.
+     * addPathPatterns : 특정 패턴에만 적용하는 설정메소드
+     */
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new GreetingInterceptor());
+        registry.addInterceptor(new AnotherInterceptor())
+                .order(-1)
+                .addPathPatterns("/hi");
+    }
+}
+~~~
+
+# 리소스 핸들러
+
+- https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/servlet/config/annotation/WebMvcConfigurerhtml#addResourceHandlers-org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry-
+
+- 이미지, 자바스크립트, CSS 그리고 HTML 파일과 같은 `정적인 리소스를 처리하는 핸들러 등록`하는 방법
+
+- 디폴트(Default) 서블릿
+  - 서블릿 컨테이너가 기본으로 제공하는 서블릿으로 정적인 리소스를 처리할 때 사용한다.
+  - https://tomcat.apache.org/tomcat-9.0-doc/default-servlet.html
+
+- 스프링 MVC 리소스 핸들러 맵핑 등록
+  - 가장 낮은 우선 순위로 등록.
+    - 다른 핸들러 맵핑이 “/” 이하 요청을 처리하도록 허용하고
+    - 최종적으로 리소스 핸들러가 처리하도록.
+- DefaultServletHandlerConfigurer
+
+- 리소스 핸들러 설정
+  - 어떤 요청 패턴을 지원할 것인가
+  - 어디서 리소스를 찾을 것인가
+  - 캐싱
+  - ResourceResolver: 요청에 해당하는 리소스를 찾는 전략
+    - 캐싱, 인코딩(gzip, brotli), WebJar, ...
+  - ResourceTransformer: 응답으로 보낼 리소스를 수정하는 전략
+    - 캐싱, CSS 링크, HTML5 AppCache, ...
+
+> WebConfig.class
+
+~~~
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+
+  @Override
+  public void addResourceHandlers(ResourceHandlerRegistry registry) {
+      registry.addResourceHandler("/mobile/**")
+              .addResourceLocations("classpath:/mobile/")
+              .setCacheControl(CacheControl.maxAge(10, TimeUnit.MINUTES))
+              .resourceChain(true);;
+  }
+}
+~~~
+
+return 하는 리소스들은 기본적으로 캐쉬와 관련된 Header 와 같이 응답 Header 에 추가가 되고
+응답은 리소스가 변경되지 않았다면 10분동안 캐싱이 됩니다.
+
+resourceChain : 캐쉬를 사용할것인지 아닌지를 설정하는 메소드 (개발중인지 운영중인지)
+
+> Test.class
+
+~~~
+@Test
+public void helloStatic() throws Exception {
+    mockMvc.perform(get("/mobile/index.html"))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("mobile")))
+            .andExpect(header().exists(HttpHeaders.CACHE_CONTROL))
+            .andDo(print());
+}
+~~~
+
+- 스프링 부트
+  - `기본 정적 리소스 핸들러와 캐싱 제공` 
+
+- 참고
+  - https://www.slideshare.net/rstoya05/resource-handling-spring-framework-41
