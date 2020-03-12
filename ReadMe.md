@@ -19,6 +19,10 @@
 - [7. 스프링 MVC 구성 요소](#스프링-MVC-구성-요소)
 - [8. 스프링 MVC 동작 원리](#스프링-MVC-동작-원리)
   - [1. web xml 설정없이 DispatcherServlet](#web-xml-설정없이-DispatcherServlet)
+- [9. @EnableWebMvc](#@EnableWebMvc)
+  - [1. 디버깅](#디버깅)
+- [10. @EnableWebMvc 어노테이션 사용시 설정 추가 방법 (WebMvcConfigurer Interface)](#@EnableWebMvc-어노테이션-사용시-설정-추가-방법-(WebMvcConfigurer-Interface))  
+- [11. 스프링 부트의 스프링 MVC 설정](#스프링-부트의-스프링-MVC-설정)
 
 # 스프링 MVC
 
@@ -498,6 +502,16 @@ protected void doGet(HttpServletRequest req, HttpServletResponse resp)
 
 ## DispatcherServlet
 
+- 기존의 Servlet
+  - 기존의 방식은 요청 url당 servlet을 생성하고 그에맞는 Controller에게 요청을 보내주는 코드를 각각 다 따로 작성해야 했습니다.
+  - 요청 1 -> Servlet 1 -> Controller 1
+  - 요청 2 -> Servlet 2 -> Controller 2
+  - 요청 3 -> Servlet 3 -> Controller 3
+
+- Front Controller 패턴 적용
+  - FrontController 패턴을 적용하면 하나의 Servlet에서 모든 요청을 받아들여 적절한 Controller로 요청을 위임해줍니다.
+  - 요청 1, 2, 3 -> Front Controller -> Controller 1, 2, 3
+
 서블릿 컨텍스트를 만들며 요청을 처리할 때마다 서블릿을 하나씩 만들 때 `공통으로 사용하고싶은 부분은 Front Controller 디자인 패턴`으로 해결합니다.
 
 Front Controller 는 `모든 요청을 하나의 컨트롤러에서 받아서 처리`하는 것입니다.
@@ -657,9 +671,13 @@ Controller 만 Bean 으로 등록하겠다.
 > DispatcherServlet.class
 
 ~~~
+첫째로 모든 요청은 적절한 HttpServletRequest, HttpServletResponse 객체를 매개변수로 받는 `doService()를 호출`하게 됩니다. 
+doDispatch() 에게 위임 합니다.
+
 디버그 > protected void doService(HttpServletRequest request, HttpServletResponse response) throws Exception { ... }
 
 ...
+실제로 핸들러에게 요청을 전달하는 처리를 한다고 나와있습니다.
 
 디버그 into > this.doDispatch(request, response);
 
@@ -679,6 +697,9 @@ protected void doDispatch(HttpServletRequest request, HttpServletResponse respon
       ...
       while(var2.hasNext()) {
           HandlerMapping mapping = (HandlerMapping)var2.next();
+
+          HandlerExecutionChain 에서는 간단히 말해 Object 타입으로 전달되는 handler를 원래의 Handler 타입에 맞게 변환하여 그 Handler를 전달하는 등의 일을 하고있습니다. 
+
           HandlerExecutionChain handler = mapping.getHandler(request);
           if (handler != null) {
               return handler;
@@ -732,6 +753,14 @@ handlerMethod 라는 객체 내부에는 해당 핸들러의 정보가 들어있
 
 실행을 하면 결과같은 문자열로 반환됩니다.
 
+- 요약
+
+1. 사용자가 요청을 하게 되면 DispatcherServlet의 doService()가 호출됩니다.
+2. doService()에서는 이 요청을 처리하기 위핸 Handler와 Adapter를 찾아 호출하기 위해 다시 doDispatch()를 호출합니다.
+3. doDistpatch()에서는 HandlerMapping을 통해서 요청에 맞는 HandlerMethod를 찾습니다. 그 후 찾아낸 HandlerMethod를 호출할 수 있는 HandlerAdapter를 찾습니다.
+4. HandlerAdpater에 의해 실질적으로 handlerMethod가 실행됩니다.
+5. 마지막으로 ReturnValueHandler에 의해 handlerMethod의 실행 결과값을 적절한 Response로 생성하여 사용자에게 응답합니다.
+
 ## DispatcherServlet View 존재하는 경우
 
 ~~~
@@ -782,6 +811,8 @@ public class SimpleController implements Controller {
 어노테이션 기반의 핸들러가 아니라서 이경우 핸들러 어뎁터도 변경됩니다 simplecontrollerhandleradapter 으로 인해서 실행되게 됩니다.
 
 # 커스텀 ViewResolver 등록
+
+ViewResolver는 `사용자가 요청한 것에 대한 응답 view를 렌더링하는 역할`을 합니다. 
 
 > DispatcherServlet.class
 
@@ -852,6 +883,12 @@ public class WebConfig {
 }
 ~~~
 
+Spring Boot에서 view이름만 적어주어도 알맞은 view를 찾아가는 이유는 suffix, prefix 설정때문 입니다.
+InternalResourceViewResolver 에서는 요청에 맞는 View를 렌더링하여 반환해주는 역할을 한다고했습니다. 
+`Prefix는 렌더링시 handler에서 반환하는 문자열의 앞에 Resolver가 자동으로 붙혀줄 문자열`을 의미합니다. 
+`Suffix는 뒷쪽에 붙는 문자열`입니다. 
+따라서 이처럼 설정하게 되면 단순히 handler에서 view 이름만을 반환하면 ViewResolver에서 view의 위치와 확장자를 연결하여 view를 렌더링하게 됩니다.
+
 InternalResourceViewResolver 설정을 하면 Controller 에서 return 값을 간결하게 사용할 수 있습니다.
 return new ModelAndView("/WEB-INF/simple.jsp"); -> return new ModelAndView("simple");
 
@@ -899,12 +936,14 @@ viewResolvers 값이 존재하므로 기본 viewResolver 는 적용되지 않습
   - `핸들러에서 뷰 이름을 명시적으로 리턴하지 않은 경우`, 요청을 기반으로 뷰 이름을 판단하는 인터페이스
 
 - ViewResolver
-  - 뷰 이름(string)에 해당하는 뷰를 찾아내는 인터페이스
+  - handler에서 반환하는 View 이름(String)에 해당하는 View를 찾아내는 인터페이스 입니다.
+  - 개발자가 별도의 Bean을 등록하지 않는다면, 기본전략으로 InternalResourceViewResolver 가 사용이됩니다. InternalResourceViewResolver 는 기본적으로 JSP를 지원하기 때문에 지금까지 JSP를 사용하여 반환할 수 있었던 것입니다.
 
 - FlashMapManager
   - FlashMap 인스턴스를 가져오고 저장하는 인터페이스
   - FlashMap은 주로 리다이렉션을 사용할 때 요청 매개변수를 사용하지 않고 데이터를 전달하고 정리할 때 사용한다.
-  - redirect:/events
+  - 필요에 의해 Redirect를 할 때에 데이터를 손쉽게 전달할때 사용합니다.
+  - 즉, Redirect시 데이터를 전달할때에는 파라미터를 이용해 전달합니다 (http://example?a=1&b=2). 이때, url이 굉장히 복잡해지고, url의 길이제한에 걸릴 수도 있습니다. 즉 이런 경우에 FlashMap을 복원한다면 redirect 될때 단한번만 값을 유지하도록 할 수 있습니다.
 
 # 스프링 MVC 동작 원리
 
@@ -939,6 +978,8 @@ public class WebApplication implements WebApplicationInitializer {
     @Override
     public void onStartup(ServletContext servletContext) throws ServletException {
         AnnotationConfigWebApplicationContext applicationContext = new AnnotationConfigWebApplicationContext();
+        applicationContext.setServletContext(servletContext);
+
         /* 애플리케이션 컨텍스트 설정을 등록합니다. */
         applicationContext.register(WebConfig.class);
         applicationContext.refresh();
@@ -951,3 +992,264 @@ public class WebApplication implements WebApplicationInitializer {
     }
 }
 ~~~
+
+WebApplicationInitializer 를 구현합니다.  
+이 인터페이스를 구현하면 `onStartup() 메소드`를 구현합니다. 
+`WebApplication이 초기화 되는 시점에 호출`되기 때문에 마치 `web.xml의 설정파일 처럼 사용`할 수 있습니다. 
+그 때문에, 매개변수로 주어지는 servletContext에 필요한 `servletMapping,listener, Filter 들을 등록`할 수 있습니다.
+
+우선 DispatcherServlet 을 등록하기 전에 `DispatcherServlet에서 사용할 IoCContainer를 생성하고 설정`합니다.
+`Annotation 기반의 설정`을 할 것이기 때문에 구현체인 `AnnotationConfigApplicationContext를 사용`하겠습니다. 
+그 후 context.register() 메소드를 이용해 이전에 만들어 두었던 `WebConfig 클래스를 등록`해주고, 마지막으로 refresh()를 해줍니다. 
+추가적으로 IoC Container(ApplicationContext)의 `setServletContext() 메소드를 이용해 ServletContext를 등록`해주어야 하는데, 
+이는 종종 `IoC Container에서 ServletContext를 참조하는 코드가 있기 때문`입니다.
+
+WebConfig는 web.xml 에 bean설정들을 하지 않고 또, 
+그 bean설정을 한 파일의 위치를 web.xml에 작성하지 않도록하기 위해서, 
+`@Configuration 을 이용해 Bean설정 파일임을 알려주고,`
+@ComponentScan 을 이용해 `이 클래스가 위치한 곳을 기반으로 Streotype 의 어노테이션을 가지고 있는 모든 Bean을 자동으로 scan하여 IoC Container에 등록`해주도록 했습니다.
+
+생성한 IoC Container 를 매개변수로하여, `DispatcherServlet 을 생성`합니다. 
+그 후 onStartup() 메소드의 인자로 전달된 ServletContext 객체의 `addServlet() 메소드를 이용해, DispatcherServlet을 등록`합니다.
+
+addServlet() 의 반환값으로 전달되는 ServletRegistration.Dynamic 객체를 이용해 addMapping() 을 호출하여 DispatcherServlet에 mapping될 url을 지정해주면 됩니다.
+
+# @EnableWebMvc
+
+애노테이션 기반 스프링 MVC를 사용할 때 편리한 웹 MVC 기본 설정
+
+~~~
+@Import({DelegatingWebMvcConfiguration.class})
+public @interface EnableWebMvc { }
+~~~
+
+> WebConfig.class
+
+~~~
+@Configuration
+@EnableWebMvc
+public class WebConfig {
+
+    @Bean
+    public ViewResolver viewResolver() {
+        InternalResourceViewResolver viewResolver = new InternalResourceViewResolver();
+        viewResolver.setPrefix("/WEB-INF/");
+        viewResolver.setSuffix(".jsp");
+
+        return viewResolver;
+    }
+
+    @Bean
+    public HandlerMapping handlerMapping() {
+        RequestMappingHandlerMapping handlerMapping = new RequestMappingHandlerMapping();
+        handlerMapping.setInterceptors();
+        return handlerMapping;
+    }
+}
+~~~
+
+위 처럼 직접 `WebConfig Class에 Bean을 직접 등록하여 DispatcherServlet 이 초기화` 되도록 할 수도 있었습니다. 
+하지만 위의 방법은 `Low레벨의 설정방법`입니다. 
+SpringBoot뿐만 아니라 Spring MVC에서도 위와 같이 `설정하는 경우는 없습니다.`
+
+SpringMVC 에서 `@EnableWebMvc 어노테이션을 사용하여 Bean 을 등록`합니다.
+@EnableWebMvc는 `어노테이션 기반의 SpringMvc를 구성할때 필요한 Bean설정들을 자동으로 해주는 어노테이션`입니다. 
+또한 기본적으로 등록해주는 Bean들 이외에 `추가적으로 개발자가 필요로하는 Bean들을 등록을 손쉽게 할 수 있도록 도와줍니다.`
+
+## 디버깅
+
+- HandlerMapping
+
+`기본 설정시에는 RequestMappingHandlerMaping 객체의 우선순위가 더 낮기때문`에 아래에 있었지만, 
+Bean 직접등록하여 사용하는 설정이 아닌 `어노테이션 기반을 돕는 설정이기 때문에` RequestMappingHandlerMapping이 위로 올라온 것을 볼 수 있습니다.
+각 `맵핑의 Order 값`을 보면 순서를 직관적으로 볼수 있습니다.
+
+추가적으로 `Interceptor 도 자동으로 등록`되는 것을 볼수 있습니다. `(기본설정의 경우 Interceptor가 아예 없습니다.)`
+
+이러한 기본설정의 위치
+
+> EnableWebMvc.annotation > DelegatingWebMvcConfiguration.class > WebMvcConfigurationSupport.class
+
+~~~
+...
+  @Bean
+  public RequestMappingHandlerMapping requestMappingHandlerMapping() {
+    RequestMappingHandlerMapping mapping = this.createRequestMappingHandlerMapping();
+    mapping.setOrder(0);
+    mapping.setInterceptors(this.getInterceptors(conversionService, resourceUrlProvider));
+    mapping.setContentNegotiationManager(contentNegotiationManager);
+    mapping.setCorsConfigurations(this.getCorsConfigurations());
+    ...
+  }
+...
+~~~
+
+- HandlerAdapter
+
+HandlerAdapter의 messageConverters의 경우 7개의 converter가 자동으로 등록되어 있는 것을 볼 수 있습니다. 
+추가적으로 Jackson 의존성이 추가되어있다면 requestbody, responsebody에 json형식으로 컨버팅이 가능한 Converter가 자동으로 등록이 되도록 되어있습니다. 
+
+> EnableWebMvc.annotation > DelegatingWebMvcConfiguration.class > WebMvcConfigurationSupport.class
+
+~~~
+...
+  static {
+      ClassLoader classLoader = WebMvcConfigurationSupport.class.getClassLoader();
+      romePresent = ClassUtils.isPresent("com.rometools.rome.feed.WireFeed", classLoader);
+      jaxb2Present = ClassUtils.isPresent("javax.xml.bind.Binder", classLoader);
+      jackson2Present = ClassUtils.isPresent("com.fasterxml.jackson.databind.ObjectMapper", classLoader) && ClassUtils.isPresent("com.fasterxml.jackson.core.JsonGenerator", classLoader);
+      jackson2XmlPresent = ClassUtils.isPresent("com.fasterxml.jackson.dataformat.xml.XmlMapper", classLoader);
+      jackson2SmilePresent = ClassUtils.isPresent("com.fasterxml.jackson.dataformat.smile.SmileFactory", classLoader);
+      jackson2CborPresent = ClassUtils.isPresent("com.fasterxml.jackson.dataformat.cbor.CBORFactory", classLoader);
+      gsonPresent = ClassUtils.isPresent("com.google.gson.Gson", classLoader);
+      jsonbPresent = ClassUtils.isPresent("javax.json.bind.Jsonb", classLoader);
+  }
+...
+~~~
+
+class에 가면 static 필드에서 `classpath를 탐색해 해당 클래스들이 존재하는지를 보고 존재의 진위여부를 boolean값으로 저장`합니다. 
+이 boolean 값은 앞으로 설명드릴 `messageConverter 등록 과정에서 사용`됩니다.
+
+~~~
+  @Bean
+  public RequestMappingHandlerAdapter requestMappingHandlerAdapter() {
+    ...
+    adapter.setMessageConverters(this.getMessageConverters());
+    ...
+  }
+~~~
+
+RequestMappingHandlerAdapter를 Bean으로 등록하는 메소드 입니다. 
+해당 메소드에서는 RequestMappingHandlerAdapter 객체를 생성한 뒤 각각의 필요한 필드 값들을 또다른 메소드를 통해 등록하고 있습니다. 
+`messageConverter 를 등록하기 위해 사용되는 getMessageConverters() 메소드`를 보겠습니다.
+
+~~~
+  protected final List<HttpMessageConverter<?>> getMessageConverters() {
+      if (this.messageConverters == null) {
+          this.messageConverters = new ArrayList();
+          this.configureMessageConverters(this.messageConverters);
+
+          if (this.messageConverters.isEmpty()) {
+              this.addDefaultHttpMessageConverters(this.messageConverters);
+          }
+
+          this.extendMessageConverters(this.messageConverters);
+      }
+
+      return this.messageConverters;
+  }
+~~~
+
+getMessageConverters() 메소드에서는 `개발자가 따로 registry를 통해 등록한 MessageConverter 가 존재하는지를 파악`합니다. 
+`만약 없다면 addDefaultHttpMessageConverters() 를 다시 호출`합니다.
+
+~~~
+ protected final void addDefaultHttpMessageConverters(List<HttpMessageConverter<?>> messageConverters) {
+    if (jackson2XmlPresent) {
+      ...
+    } else if (jaxb2Present) {
+      ...
+    }
+
+    if (jackson2Present) {
+      ...
+    } else if (gsonPresent) {
+      ...
+    } else if (jsonbPresent) {
+      ...
+    }
+    ...
+ }
+~~~
+
+바로 여기서 맨 처음 static 필드에서 초기화 했던 boolean 값들을 이용하게 됩니다. 
+여기서 각각의 Class들이 `classpath에 존재하는지를 파악한 뒤 만약 존재한다면 그에 해당하는 MessageConverter들을 자동으로 등록`하게 됩니다.
+
+# @EnableWebMvc 어노테이션 사용시 설정 추가 방법 (WebMvcConfigurer Interface)
+
+Spring MVC 가 Boot 없이 동작되는 방법
+
+WebMvcConfigurer Interface 는 @EnableWebMvc 어노테이션에서 제공하는 Bean을 커스터마이징(설정)할 수 있는 기능을 제공하는 인터페이스 입니다.
+
+확장을 위해 WebMvcConfigurer를 구현합니다. 
+이때 확장을 필요로하는 메소드만을 구현하여 확장해주면 됩니다. 
+인터페이스를 사용했지만 abstract 클래스처럼 사용할 수 있는 이유는 각각의 메소드를 default로 작성했기 때문입니다.
+
+~~~
+@Configuration
+@ComponentScan
+@EnableWebMvc
+public class WebConfig implements WebMvcConfigurer {
+
+  @Override
+  public void configureViewResolvers(ViewResolverRegistry registry) {
+      registry.jsp("/WEB-INF/", ".jsp");
+  }
+}
+~~~
+
+# 스프링 부트의 스프링 MVC 설정
+
+Spring Boot 프로젝트 "demo-spring-mvc" 
+
+> DispatcherServlet.class
+
+~~~
+디버그 > protected void doService() {
+
+}
+~~~
+
+DispatcherServlet 의 this 내부에 어떠한 handlerMappings, handlerAdapters 들을 가지고있는지 확인합니다.
+
+- handlerMappings 
+  - SimpleUrlHandlerMapping
+    - beanName 으로 resourceHandlerMapping 등록되어 있으며 해당 핸들러로 인해서 정적 리소스 지원이 가능합니다. (/main/resources/static/...)
+  - WelcomePageHandlerMapping
+    - 리소스 지원을 해주는 핸들러로 index mapping 을 해줍니다.
+
+- handlerAdapters
+  - RequestMappingHandlerAdapter
+    - 실제 요청을 처리하는 핸들러를 실행해줄 수 있는 어뎁터
+
+- ViewResolvers
+  - ContentNegotiatingViewResolver
+    - ContentNegotiatingViewResolver 이외의 모든 ViewResolver 들을 사용합니다.
+    - 직접 View 이름에 해당하는 View 를 찾아주는게 아니라 다른 ViewResolver 들에게 위임합니다.
+    - ContentNegotiatingViewResolver -> ViewResolvers 내부에 다른 ViewResolver 들을 참조하는 것을 알 수 있습니다.
+
+이러한 설정들을 불러오는 위치
+
+> spring-boot-autoconfigure/spring.factories
+
+~~~
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+...
+org.springframework.boot.autoconfigure.web.servlet.DispatcherServletAutoConfiguration,\
+org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration,\
+...
+~~~
+
+EnableAutoConfiguration 해당하는 밑의 모든 자동설정 파일이 조건에 따라서 자동설정 됩니다.
+
+> WebMvcAutoConfiguration.class
+
+~~~
+@ConditionalOnWebApplication(type = Type.SERVLET)
+@ConditionalOnClass({ Servlet.class, DispatcherServlet.class, WebMvcConfigurer.class })
+@ConditionalOnMissingBean(WebMvcConfigurationSupport.class)
+@AutoConfigureOrder(Ordered.HIGHEST_PRECEDENCE + 10)
+@AutoConfigureAfter({ DispatcherServletAutoConfiguration.class, TaskExecutionAutoConfiguration.class,
+		ValidationAutoConfiguration.class })
+public class WebMvcAutoConfiguration {
+  ...
+}
+~~~
+
+- ConditionalOnWebApplication : 웹 에플리케이션 타입이 서블릿일때만 실행됩니다.
+- ConditionalOnClass : 등록된 클래스가 존재하면 실행됩니다.
+- ConditionalOnMissingBean : 선언된 클래스가 없는경우 실행됩니다.
+  - WebMvcConfigurationSupport 는 DelegatingWebMvcConfiguration 의 부모입니다.
+  - Spring Boot 가 지원하는 MVC 자동설정을 사용하지 않으려면?
+  - @Configuration + @EnableWebMvc + Imlements WebMvcConfigurer 를 사용하면 커스텀 가능합니다.
+

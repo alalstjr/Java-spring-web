@@ -12,6 +12,7 @@ public class WebApplication implements WebApplicationInitializer {
     @Override
     public void onStartup(ServletContext servletContext) throws ServletException {
         AnnotationConfigWebApplicationContext applicationContext = new AnnotationConfigWebApplicationContext();
+        applicationContext.setServletContext(servletContext);
         /* 애플리케이션 컨텍스트 설정을 등록합니다. */
         applicationContext.register(WebConfig.class);
         applicationContext.refresh();
