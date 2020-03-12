@@ -29,6 +29,9 @@
 - [14. 핸들러 인터셉터](#핸들러-인터셉터)
   - [1. 핸들러 인터셉터 구현](#핸들러-인터셉터-구현)
 - [15. 리소스 핸들러](#리소스-핸들러)
+- [16. HTTP 메시지 컨버터](#HTTP-메시지-컨버터)
+  - [1. JSON](#JSON)
+  - [2. XML](#XML)
 
 # 스프링 MVC
 
@@ -1603,3 +1606,209 @@ public void helloStatic() throws Exception {
 
 - 참고
   - https://www.slideshare.net/rstoya05/resource-handling-spring-framework-41
+
+# HTTP 메시지 컨버터
+
+- https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/servlet/config/annotation/WebMvcConfigurer.html#configureMessageConverters-java.util.List-
+- https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/servlet/config/annotation/WebMvcConfigurer.html#extendMessageConverters-java.util.List-
+
+- HTTP 메시지 컨버터
+  - 요청 본문에서 메시지를 읽어들이거나(@RequestBody), 응답 본문에 메시지를 작성할 때(@ResponseBody) 사용한다.
+
+> Controller.class
+
+~~~
+@RestController
+public class SampleController {
+  @GetMapping("/message")
+  // @ResponseBody
+  public String message(@RequestBody String body) {
+      return body;
+  }
+}
+~~~
+
+> Test.class
+
+~~~
+@Test
+public void stringMessage() throws Exception {
+    mockMvc.perform(get("/message").content("hello"))
+            .andExpect(status().isOk())
+            .andExpect(content().string("hello"))
+            .andDo(print());
+}
+~~~
+
+본문으로 받은 hello 값을 문자열로 hello를 반환해줬습니다.
+
+- @RequestBody : 어노테이션을 사용하면 본문에 들어있는 메세지를 Http Message 컨버터를 사용해서 컨버전을 합니다.
+- @ResponseBody : 어노테이션이 붙어있으면 return 값을 응답의 본문으로 넣어줍니다.
+하지만 @RestContoller 어노테이션이 상위에 붙어있기 때문에 @ResponseBody 값은 디폴트값입니다. 생략 가능
+
+본문의 문자열 JSON을 객체로 변환하거나 문자열로 받거나 가능합니다.
+
+- 기본 HTTP 메시지 컨버터
+  - 바이트 배열 컨버터
+  - 문자열 컨버터
+  - Resource 컨버터
+  - Form 컨버터 (폼 데이터 to/from MultiValueMap<String, String>)
+  - (JAXB2 컨버터)
+  - (Jackson2 컨버터)
+  - (Jackson 컨버터)
+  - (Gson 컨버터)
+  - (Atom 컨버터)
+  - (RSS 컨버터)
+  - ...
+
+- 설정 방법
+  - 기본으로 등록해주는 컨버터에 새로운 컨버터 추가하기: extendMessageConverters
+  - 기본으로 등록해주는 컨버터는 다 무시하고 새로 컨버터 설정하기: configureMessageConverters
+  - 의존성 추가로 컨버터 등록하기 (추천)
+    - 메이븐 또는 그래들 설정에 의존성을 추가하면 그에 따른 컨버터가 자동으로 등록 된다.
+    - WebMvcConfigurationSupport
+    - (이 기능 자체는 스프링 프레임워크의 기능임, 스프링 부트 아님.)
+
+- 참고
+  - https://www.baeldung.com/spring-httpmessageconverter-rest
+
+## JSON
+
+- 스프링 부트를 사용하지 않는 경우
+  - 사용하고 싶은 JSON 라이브러리를 의존성으로 추가
+  - GSON
+  - JacksonJSON
+  - JacksonJSON 2
+
+- 스프링 부트를 사용하는 경우
+  - 기본적으로 JacksonJSON 2가 의존성에 들어있다.
+  - 즉, JSON용 HTTP 메시지 컨버터가 기본으로 등록되어 있다.
+
+- 참고
+  - JSON path 문법
+  - https://github.com/json-path/JsonPath
+  - http://jsonpath.com/
+
+> Controller.class
+
+~~~
+@GetMapping("/jsonMessage")
+public Person jsonMessage(@RequestBody Person person) {
+    return person;
+}
+~~~
+
+입력값도 JSON 반환하는 값도 JSON
+
+> Test.class
+
+~~~
+@Test
+public void jsonMessage() throws Exception {
+    Person person = new Person();
+    person.setId(2020L);
+    person.setName("jjunpro");
+
+    String personJson = objectMapper.writeValueAsString(person);
+
+    mockMvc.perform(get("/message")
+            .content(personJson)
+            .contentType(MediaType.APPLICATION_JSON)
+            .accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(content().string("hello"))
+            .andExpect(jsonPath("$.id").value(2020))
+            .andDo(print());
+}
+~~~
+
+contentType : 사용자가 본문에 보내는 정보가 어떠한 타입인지 서버에 알려주는 정보
+accept : 요청의 대한 응답으로 어떠한 타입을 원하는지 알려주는 정보
+jsonPath : Json 정보와 일치하는지 검사합니다.
+
+## XML
+
+- OXM(Object-XML Mapper) 라이브러리 중에 스프링이 지원하는 의존성 추가
+  - JacksonXML
+  - JAXB
+
+- 스프링 부트를 사용하는 경우
+  - 기본으로 XML 의존성 추가해주지 않음.
+
+- JAXB 의존성 추가
+
+~~~
+<dependency>
+<groupId>javax.xml.bind</groupId>
+<artifactId>jaxb-api</artifactId>
+</dependency>
+<dependency>
+<groupId>org.glassfish.jaxb</groupId>
+<artifactId>jaxb-runtime</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework</groupId>
+<artifactId>spring-oxm</artifactId>
+<version>${spring-framework.version}</version>
+</dependency>
+~~~
+
+- Marshaller 등록
+
+~~~
+@Bean
+public Jaxb2Marshaller marshaller() {
+  Jaxb2Marshaller jaxb2Marshaller = new Jaxb2Marshaller();
+  jaxb2Marshaller.setPackagesToScan(Event.class.getPackageName());
+  return jaxb2Marshaller;
+}
+~~~
+
+~~~
+@XmlRootElement
+@Entity
+public class Person {
+  ...
+}
+~~~
+
+- 도메인 클래스에 @XmlRootElement 애노테이션 추가
+- 참고
+  - Xpath 문법
+  - https://www.w3schools.com/xml/xpath_syntax.asp
+  - https://www.freeformatter.com/xpath-tester.html
+
+> Controller.class
+
+~~~
+@GetMapping("/jsonMessage")
+public Person jsonMessage(@RequestBody Person person) {
+    return person;
+}
+~~~
+
+입력값도 JSON 반환하는 값도 JSON
+
+> Test.class
+
+~~~
+@Test
+public void xmlMessage() throws Exception {
+    Person person = new Person();
+    person.setId(2020L);
+    person.setName("jjunpro");
+
+    StringWriter stringWriter = new StringWriter();
+    StreamResult streamResult = new StreamResult(stringWriter);
+    marshaller.marshal(person, streamResult);
+    String xmlString = stringWriter.toString();
+
+    mockMvc.perform(get("/jsonMessage")
+            .content(xmlString)
+            .contentType(MediaType.APPLICATION_XML)
+            .accept(MediaType.APPLICATION_XML))
+            .andExpect(status().isOk())
+            .andExpect(xpath("person/id").string("2020"))
+            .andDo(print());
+}
+~~~
