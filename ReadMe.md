@@ -32,6 +32,9 @@
 - [16. HTTP 메시지 컨버터](#HTTP-메시지-컨버터)
   - [1. JSON](#JSON)
   - [2. XML](#XML)
+- [17. 그밖에 WebMvcConfigurer 설정](#그밖에-WebMvcConfigurer-설정)
+- [18. 요청 맵핑하기 HTTP Method](#요청-맵핑하기-HTTP-Method)
+- [19. 요청 맵핑하기 URI 패턴](#요청-맵핑하기-URI-패턴)
 
 # 스프링 MVC
 
@@ -1812,3 +1815,147 @@ public void xmlMessage() throws Exception {
             .andDo(print());
 }
 ~~~
+
+# 그밖에 WebMvcConfigurer 설정
+
+- https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/servlet/config/annotation/WebMvcConfigurer.html
+
+- CORS 설정
+  - Cross Origin 요청 처리 설정
+  - 같은 도메인에서 온 요청이 아니더라도 처리를 허용하고 싶다면 설정한다.
+
+- 리턴 값 핸들러 설정
+  - 스프링 MVC가 제공하는 기본 리턴 값 핸들러 이외에 리턴 핸들러를 추가하고 싶을 때 설정한다.
+
+- 아큐먼트 리졸버 설정
+  - 스프링 MVC가 제공하는 기본 아규먼트 리졸버 이외에 커스텀한 아규먼트 리졸버를 추가하고 싶을 때 설정한다.
+
+- 뷰 컨트롤러
+  - 단순하게 요청 URL을 특정 뷰로 연결하고 싶을 때 사용할 수 있다.
+
+- 비동기 설정
+  - 비동기 요청 처리에 사용할 타임아웃이나 TaskExecutor를 설정할 수 있다.
+
+- 뷰 리졸버 설정
+  - 핸들러에서 리턴하는 뷰 이름에 해당하는 문자열을 View 인스턴스로 바꿔줄 뷰 리졸버를 설정한다.
+
+- Content Negotiation 설정
+  - 요청 본문 또는 응답 본문을 어떤 (MIME) 타입으로 보내야 하는지 결정하는 전략을 설정한다.
+
+# 요청 맵핑하기 HTTP Method
+
+- HTTP Method
+  - GET, POST, PUT, PATCH, DELETE, ...
+
+- GET 요청
+  - 클라이언트가 서버의 리소스를 요청할 때 사용한다.
+  - 캐싱 할 수 있다. (조건적인 GET으로 바뀔 수 있다.)
+  - 브라우저 기록에 남는다.
+  - 북마크 할 수 있다.
+  - 민감한 데이터를 보낼 때 사용하지 말 것. (URL에 다 보이니까)
+  - idempotent
+
+- POST 요청
+  - 클라이언트가 서버의 리소스를 수정하거나 새로 만들 때 사용한다.
+  - 서버에 보내는 데이터를 POST 요청 본문에 담는다.
+  - 캐시할 수 없다.
+  - 브라우저 기록에 남지 않는다.
+  - 북마크 할 수 없다.
+  - 데이터 길이 제한이 없다.
+
+- PUT 요청
+  - URI에 해당하는 데이터를 새로 만들거나 수정할 때 사용한다.
+  - POST와 다른 점은 “URI”에 대한 의미가 다르다.
+    - POST의 URI는 보내는 데이터를 처리할 리소스를 지칭하며
+    - PUT의 URI는 보내는 데이터에 해당하는 리소스를 지칭한다.
+  - Idempotent
+
+- PATCH 요청
+  - PUT과 비슷하지만, 기존 엔티티와 새 데이터의 차이점만 보낸다는 차이가 있다.
+  - Idempotent
+
+- DELETE 요청
+  - URI에 해당하는 리소스를 삭제할 때 사용한다.
+  - Idempotent
+
+- 스프링 웹 MVC에서 HTTP method 맵핑하기
+  - @RequestMapping(method=RequestMethod.GET)
+  - @RequestMapping(method={RequestMethod.GET, RequestMethod.POST})
+  - @GetMapping, @PostMapping, ...
+
+- 참고
+  - https://www.w3schools.com/tags/ref_httpmethods.asp
+  - https://tools.ietf.org/html/rfc2616#section-9.3
+  - https://tools.ietf.org/html/rfc2068
+
+# 요청 맵핑하기 URI 패턴
+
+- URI, URL, URN 햇갈린다
+  - https://stackoverflow.com/questions/176264/what-is-the-difference-between-a-uri-a-url-and-a-urn
+
+- 요청 식별자로 맵핑하기
+  - @RequestMapping은 다음의 패턴을 지원합니다.
+  - ?: 한 글자 (“/author/???” => “/author/123”)
+  - *: 여러 글자 (“/author/*” => “/author/keesun”)
+  - ** : 여러 패스 (“/author/** => “/author/keesun/book”)
+
+~~~
+@GetMapping({"/hello", "/hi"})
+@GetMapping("/hello/?")
+~~~
+
+- 클래스에 선언한 @RequestMapping과 조합
+  - 클래스에 선언한 URI 패턴뒤에 이어 붙여서 맵핑합니다.
+
+- 정규 표현식으로 맵핑할 수도 있습니다.
+  - /{name:정규식}
+
+~~~
+@GetMapping("/{name:[a-z]+}")
+@ResponseBody
+public String hello(@PathVariable String name) {
+    return "hello";
+}
+~~~
+
+- 패턴이 중복되는 경우에는?
+  - 가장 구체적으로 맵핑되는 핸들러를 선택합니다.
+
+~~~
+@Controller
+@RequestMapping("/hello")
+public class SampleController {
+
+    @GetMapping("/jjunpro")
+    @ResponseBody
+    public String hello() {
+        return "hello";
+    }
+
+    @GetMapping("/**")
+    @RequestMapping
+    public String helloAll() {
+        return "helloAll";
+    }
+}
+
+@Test
+public void hello() throws Exception {
+    mockMvc.perform(get("/hello/jjunpro"))
+            .andExpect(status().isOk())
+            .andExpect(content().string("hello"))
+            .andExpect(handler().handlerType(SampleController.class))
+            .andExpect(handler().methodName("hello"))
+            .andDo(print());
+}
+~~~
+
+- URI 확장자 맵핑 지원
+  - 이 기능은 권장하지 않습니다. (스프링 부트에서는 기본으로 이 기능을 사용하지 않도록 설정 해 줌)
+    - 보안 이슈 (RFD Attack)
+    - URI 변수, Path 매개변수, URI 인코딩을 사용할 때 할 때 불명확 함.
+
+- RFD Attack
+  - https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/reflected-file-download-a-new-web-attack-vector/
+  - https://www.owasp.org/index.php/Reflected_File_Download
+  - https://pivotal.io/security/cve-2015-5211
