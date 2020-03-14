@@ -35,6 +35,13 @@
 - [17. 그밖에 WebMvcConfigurer 설정](#그밖에-WebMvcConfigurer-설정)
 - [18. 요청 맵핑하기 HTTP Method](#요청-맵핑하기-HTTP-Method)
 - [19. 요청 맵핑하기 URI 패턴](#요청-맵핑하기-URI-패턴)
+- [20. HTTP 요청 맵핑하기 미디어 타입 맵핑](#HTTP-요청-맵핑하기-미디어-타입-맵핑)
+- [21. 요청 맵핑하기 헤더와 매개변수](#요청-맵핑하기-헤더와-매개변수)
+- [22. HTTP 요청 맵핑하기 HEAD와 OPTIONS 요청 처리](#HTTP-요청-맵핑하기-HEAD와-OPTIONS-요청-처리)
+- [22. 요청 맵핑하기 커스텀 애노테이션](#요청-맵핑하기-커스텀-애노테이션)
+- [23. 핸들러 메소드 아규먼트와 리턴 타입](#핸들러-메소드-아규먼트와-리턴-타입)
+- [24. 핸들러 메소드 URI 패턴](#핸들러-메소드-URI-패턴)
+- [25. 핸들러 메소드 @RequestMapping](#핸들러-메소드-@RequestMapping)
 
 # 스프링 MVC
 
@@ -1959,3 +1966,233 @@ public void hello() throws Exception {
   - https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/reflected-file-download-a-new-web-attack-vector/
   - https://www.owasp.org/index.php/Reflected_File_Download
   - https://pivotal.io/security/cve-2015-5211
+
+# HTTP 요청 맵핑하기 미디어 타입 맵핑
+
+- 특정한 타입의 데이터를 담고 있는 요청만 처리하는 핸들러
+  - @RequestMapping(consumes=MediaType.APPLICATION_JSON_UTF8_VALUE)
+  - Content-Type 헤더로 필터링
+  - 매치 되는 않는 경우에 415 Unsupported Media Type 응답
+
+- 특정한 타입의 응답을 만드는 핸들러
+  - @RequestMapping(produces=”application/json”)
+  - Accept 헤더로 필터링 (하지만 살짝... 오묘함)
+  - 매치 되지 않는 경우에 406 Not Acceptable 응답
+
+문자열을 입력하는 대신 MediaType을 사용하면 상수를 (IDE에서) 자동 완성으로 사용할 수 있다.
+
+클래스에 선언한 @RequestMapping에 사용한 것과 조합이 되지 않고 메소드에 사용한
+@RequestMapping의 설정으로 덮어쓴다.
+
+Not (!)을 사용해서 특정 미디어 타입이 아닌 경우로 맵핑 할 수도 있다.
+
+# 요청 맵핑하기 헤더와 매개변수
+
+- 특정한 헤더가 있는 요청을 처리하고 싶은 경우
+  - @RequestMapping(headers = “key”)
+- 특정한 헤더가 없는 요청을 처리하고 싶은 경우
+  - @RequestMapping(headers = “!key”)
+- 특정한 헤더 키/값이 있는 요청을 처리하고 싶은 경우
+  - @RequestMapping(headers = “key=value”)
+- 특정한 요청 매개변수 키를 가지고 있는 요청을 처리하고 싶은 경우
+  - @RequestMapping(params = “a”)
+- 특정한 요청 매개변수가 없는 요청을 처리하고 싶은 경우
+  - @RequestMapping(params = “!a”)
+- 특정한 요청 매개변수 키/값을 가지고 있는 요청을 처리하고 싶은 경우
+  - @RequestMapping(params = “a=b”)
+
+~~~
+@GetMapping(value = "/header", headers = HttpHeaders.FROM + "=" + "111")
+@RequestMapping
+public String helloHeader() {
+    return "helloheader";
+}
+
+@Test
+public void helloHeader() throws Exception {
+    mockMvc.perform(get("/hello/jjunpro")
+            .header(HttpHeaders.FROM, "111"))
+            .andExpect(status().isOk())
+            .andDo(print());
+}
+~~~
+
+# HTTP 요청 맵핑하기 HEAD와 OPTIONS 요청 처리
+
+- 우리가 구현하지 않아도 스프링 웹 MVC에서 자동으로 처리하는 HTTP Method
+  - HEAD
+  - OPTIONS
+
+- HEAD
+  - GET 요청과 동일하지만 응답 본문을 받아오지 않고 응답 헤더만 받아온다.
+  - 리소스에 대한 간략한 정보만 확인만 하기 때문에 본문은 보내면 안됩니다.
+
+- OPTIONS
+  - 사용할 수 있는 HTTP Method 제공
+  - 서버 또는 특정 리소스가 제공하는 기능을 확인할 수 있다.
+  - 서버는 Allow 응답 헤더에 사용할 수 있는 HTTP Method 목록을 제공해야 한다.
+
+- 참고
+  - https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html
+  - https://github.com/spring-projects/spring-framework/blob/master/spring-test/src/test/java/org/springframework/test/web/servlet/samples/standalone/resultmatchers/HeaderAssertionTests.java
+
+~~~
+@Test
+public void helloOption() throws Exception {
+    mockMvc.perform(options("/hello"))
+            .andExpect(status().isOk())
+            .andExpect(header().exists(HttpHeaders.FROM))
+            .andDo(print());
+}
+~~~
+
+# 요청 맵핑하기 커스텀 애노테이션
+
+- @RequestMapping 애노테이션을 메타 애노테이션으로 사용하기
+  - @GetMapping 같은 커스텀한 애노테이션을 만들 수 있다.
+- 메타(Meta) 애노테이션
+  - 애노테이션에 사용할 수 있는 애노테이션
+  - 스프링이 제공하는 대부분의 애노테이션은 메타 애노테이션으로 사용할 수 있다.
+- 조합(Composed) 애노테이션
+  - 한개 혹은 여러 메타 애노테이션을 조합해서 만든 애노테이션
+  - 코드를 간결하게 줄일 수 있다.
+  - 보다 구체적인 의미를 부여할 수 있다.
+- @Retention
+  - 해당 애노테이션 정보를 언제까지 유지할 것인가.
+  - Source: 소스 코드까지만 유지. 즉, 컴파일 하면 해당 애노테이션 정보는 사라진다는 이야기.
+  - Class: 컴파인 한 .class 파일에도 유지. 즉 런타임 시, 클래스를 메모리로 읽어오면 해당 정보는 사라진다.
+  - Runtime: 클래스를 메모리에 읽어왔을 때까지 유지! 코드에서 이 정보를 바탕으로 특정 로직을 실행할 수 있다.
+- @Target
+  - 해당 애노테이션을 어디에 사용할 수 있는지 결정한다.
+- @Documented
+  - 해당 애노테이션을 사용한 코드의 문서에 그 애노테이션에 대한 정보를 표기할지 결정한다.
+- 메타 애노테이션
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/core.html#beans-meta-annotations
+  - https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/core/annotation/AliasFor.html
+
+# 핸들러 메소드 아규먼트와 리턴 타입
+
+핸들러 메소드 아규먼트: 주로 요청 그 자체 또는 요청에 들어있는 정보를 받아오는데 사용한다.
+
+- 핸들러 메소드 아규먼트 설명
+
+- 요청 또는 응답 자체에 접근 가능한 API
+  - WebRequest (low level)
+  - NativeWebRequest
+  - ServletRequest(Response)
+  - HttpServletRequest(Response)
+
+- 요청 본문을 읽어오거나, 응답 본문을 쓸 때 사용할 수 있는 API
+  - InputStream
+  - Reader
+  - OutputStream
+  - Writer
+
+- 스프링 5, HTTP/2 리소스 푸쉬에 사용
+  - PushBuilder 
+
+- GET, POST, ... 등에 대한 정보
+  - HttpMethod 
+
+- LocaleResolver가 분석한 요청의 Locale 정보
+  - Locale
+  - TimeZone
+  - ZoneId
+
+- URI 템플릿 변수 읽을 때 사용
+  - @PathVariable 
+
+- URI 경로 중에 키/값 쌍을 읽어 올 때 사용
+  - @MatrixVariable 
+
+- @RequestParam
+  - 서블릿 요청 매개변수 값을 선언한 메소드 아규먼트 타입으로 변환해준다.
+  - 단순 타입인 경우에 이 애노테이션을 생략할 수 있다.
+
+- 요청 헤더 값을 선언한 메소드 아규먼트 타입으로 변환해준다.
+  - @RequestHeader 
+
+- 참고 URL
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-arguments
+
+- 핸들러 메소드 리턴: 주로 응답 또는 모델을 랜더링할 뷰에 대한 정보를 제공하는데 사용한다.
+
+- @ResponseBody 
+  - 리턴 값을 HttpMessageConverter를 사용해 응답 본문으로사용한다.
+
+- 응답 본문 뿐 아니라 헤더 정보까지, 전체 응답을 만들 때 사용한다.
+  - 응답 state 코드 상태, 응답해더, 응답 본문 등을 셋팅할 수 있습니다.
+  - Rest API 사용시 유용한 코드 
+  - HttpEntity
+  - ReponseEntity
+
+- String 
+  - `ViewResolver를 사용`해서 뷰를 찾을 때 사용할 뷰 이름.
+
+- View 
+  - 암묵적인 모델 정보를 랜더링할 뷰 인스턴스
+
+- @GetMapping("url name") 요청에서 View 이름을 찾습니다.
+- (RequestToViewNameTranslator를 통해서) 암묵적으로 판단한 뷰 랜더링할 때 사용할 모델 정보
+  - Map
+  - Model
+
+- @ModelAttribute
+  - (RequestToViewNameTranslator를 통해서) 암묵적으로 판단한 뷰 랜더링할 때 사용할 모델 정보에 추가한다.
+  - 이 애노테이션은 생략할 수 있다.
+
+- 참고 URL
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-return-types
+
+# 핸들러 메소드 URI 패턴
+
+- @PathVariable
+  - 요청 URI 패턴의 일부를 핸들러 메소드 아규먼트로 받는 방법.
+  - 타입 변환 지원.
+  - (기본)값이 반드시 있어야 한다.
+  - Optional 지원.
+- @MatrixVariable
+  - 요청 URI 패턴에서 키/값 쌍의 데이터를 메소드 아규먼트로 받는 방법
+  - 타입 변환 지원.
+  - (기본)값이 반드시 있어야 한다.
+  - Optional 지원.
+  - 이 기능은 기본적으로 비활성화 되어 있음. 활성화 하려면 다음과 같이 설정해야 함.
+
+~~~
+@Configuration
+  public class WebConfig implements WebMvcConfigurer {
+    @Override
+    public void configurePathMatch(PathMatchConfigurer configurer) {
+      UrlPathHelper urlPathHelper = new UrlPathHelper();
+      urlPathHelper.setRemoveSemicolonContent(false);
+    configurer.setUrlPathHelper(urlPathHelper);
+  }
+}
+~~~
+
+- 참고
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-typeconversion
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-matrix-variables
+
+# 핸들러 메소드 @RequestMapping
+
+- @RequestParam
+  - 요청 매개변수에 들어있는 `단순 타입 데이터를 메소드 아규먼트로 받아올 수 있다.`
+  - 값이 반드시 있어야 한다.
+    - required=false 또는 Optional을 사용해서 부가적인 값으로 설정할 수도 있다.
+
+~~~
+@GetMapping("/hello/{id}?name=jjunpro")
+public Event getEvent(@RequestParam(name = "name",required = false, defaultValue = "hello") String nameObject) { ... }
+~~~
+
+- String이 아닌 값들은 타입 컨버전을 지원한다.
+- Map<String, String> 또는 MultiValueMap<String, String>에 사용해서 모든 요청 매개변수를 받아 올 수도 있다.
+- 이 애노테이션은 생략 할 수 잇다.
+
+- 요청 매개변수란?
+  - 쿼리 매개변수
+  - 폼 데이터
+
+- 참고
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-requestparam

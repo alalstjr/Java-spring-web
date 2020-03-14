@@ -1,9 +1,11 @@
 package me.whiteship.demowebmvc;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 @Controller
@@ -26,5 +28,22 @@ public class SampleController {
     @RequestMapping
     public String helloAll() {
         return "helloAll";
+    }
+
+    @GetMapping(value = "/header", headers = HttpHeaders.FROM + "=" + "111")
+    @RequestMapping
+    public String helloHeader() {
+        return "helloheader";
+    }
+
+    @GetHelloMapping
+    @ResponseBody
+    public String helloCustom() {
+        return "helloCustom";
+    }
+
+    @GetMapping("/hello/{id}?name=jjunpro")
+    public Event getEvent(@RequestParam(name = "name",required = false, defaultValue = "hello") String nameObject) {
+
     }
 }
