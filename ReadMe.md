@@ -43,6 +43,10 @@
 - [24. 핸들러 메소드 URI 패턴](#핸들러-메소드-URI-패턴)
 - [25. 핸들러 메소드 @RequestMapping](#핸들러-메소드-@RequestMapping)
 - [26. 폼 서브밋 (타임리프)](#폼-서브밋-(타임리프))
+- [27. 핸들러 메소드 @ModelAttribute](#핸들러-메소드-@ModelAttribute)
+- [28. 핸들러 메소드 @Validated](#핸들러-메소드-@Validated)
+  - [1. 핸들러 메소드 폼 서브밋 (에러 처리)](#핸들러-메소드-폼-서브밋-(에러-처리))
+- [29. 핸들러 메소드 @SessionAttributes](#핸들러-메소드-@SessionAttributes)
 
 # 스프링 MVC
 
@@ -2276,5 +2280,127 @@ public void event() throws Exception {
             .andExpect(view().name("/events/form"))
             .andExpect(model().attributeExists("event"))
             .andDo(print());
+}
+~~~
+
+# 핸들러 메소드 @ModelAttribute
+
+- @ModelAttribute
+  - 여러 곳에 있는 `단순 타입 데이터를 복합 타입 객체로` 받아오거나 해당 객체를 새로 만들 때 사용할 수 있다.
+  - 여러 곳? URI 패스, 요청 매개변수, 세션 등
+  - 생략 가능
+
+- 값을 바인딩 할 수 없는 경우에는?
+  - BindException 발생 400 에러
+
+- 바인딩 에러를 직접 다루고 싶은 경우
+  - BindingResult 타입의 아규먼트를 바로 오른쪽에 추가한다.
+
+- 바인딩 이후에 검증 작업을 추가로 하고 싶은 경우
+  - @Valid 또는 @Validated 애노테이션을 사용한다.
+
+- 참고
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-modelattrib-method-args
+
+# 핸들러 메소드 @Validated
+
+~~~
+public class Event {
+
+  interface Validatelimit {}
+  interface ValidateName {}
+
+  @NotBlank(groups = ValidateName.class)
+  private String name;
+
+  @Min(value = 0, groups = Validatelimit.class)
+  private Integer limit;
+}
+
+@Validated(Event.ValidateName.class)
+~~~
+
+스프링 MVC 핸들러 메소드 아규먼트에 사용할 수 있으며 validation group이라는 힌트를 사용할 수 있다.
+@Valid 애노테이션에는 그룹을 지정할 방법이 없다.
+@Validated는 스프링이 제공하는 애노테이션으로 그룹 클래스를 설정할 수 있다.
+
+## 핸들러 메소드 폼 서브밋 (에러 처리)
+
+- 바인딩 에러 발생 시 Model에 담기는 정보
+  - Event
+  - BindingResult.event
+
+- 타임리프 사용시 바인딩 에러 보여주기
+  - https://www.thymeleaf.org/doc/tutorials/2.1/thymeleafspring.html#field-errors
+
+~~~
+<p th:if="${#fields.hasErrors('limit')}" th:errors="*{limit}">Incorrect date</p>
+~~~
+
+- Post / Redirect / Get 패턴
+  - https://en.wikipedia.org/wiki/Post/Redirect/Get
+  - Post 이후에 브라우저를 리프래시 하더라도 폼 서브밋이 발생하지 않도록 하는 패턴
+
+- 타임리프 목록 보여주기
+- https://www.thymeleaf.org/doc/tutorials/2.1/thymeleafspring.html#listing-seed-starter-data
+
+~~~
+<a th:href="@{/events/form}">Create New Event</a>
+<div th:unless="${#lists.isEmpty(eventList)}">
+  <ul th:each="event: ${eventList}">
+    <p th:text="${event.Name}">Event Name</p>
+  </ul>
+</div>
+~~~
+
+# 핸들러 메소드 @SessionAttributes
+
+- 모델 정보를 HTTP 세션에 저장해주는 애노테이션
+  - HttpSession을 직접 사용할 수도 있지만
+  - 이 애노테이션에 설정한 이름에 해당하는 모델 정보를 자동으로 세션에 넣어준다.
+  - @ModelAttribute는 세션에 있는 데이터도 바인딩한다.
+  - 여러 화면(또는 요청)에서 사용해야 하는 객체를 공유할 때 사용한다.
+- SessionStatus를 사용해서 세션 처리 완료를 알려줄 수 있다.
+  - 폼 처리 끝나고 세션을 비울 때 사용한다.
+
+> Controller.class
+
+~~~
+@GetMapping("/session")
+public String setSession(HttpSession httpSession, SessionStatus sessionStatus) {
+    httpSession.setAttribute("event", "setEvent");
+    sessionStatus.isComplete();
+
+    return "events/form";
+}
+~~~
+
+SessionStatus 객체는 만료상태를 정해주는 메소드를 가지고있습니다.
+
+> Test.class
+
+~~~
+@Test
+public void setSession() throws Exception {
+    mockMvc.perform(get("/session"))
+            .andExpect(MockMvcResultMatchers.request().sessionAttribute("event","setEvent"))
+            .andDo(print());
+}
+~~~
+
+SessionAttributes 설정하므로서 자동으로 session 을 등록해줍니다.
+
+~~~
+@SessionAttributes("event")
+public class EventController {
+
+  @GetMapping("/session")
+  public String setSession() {
+      Event event = new Event();
+      event.setLimit(50);
+      model.addAttribute("event", event);
+
+      return "events/form";
+  }
 }
 ~~~

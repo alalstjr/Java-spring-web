@@ -1,6 +1,7 @@
 package me.whiteship.demowebmvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -17,6 +18,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 @RunWith(SpringRunner.class)
 @WebMvcTest
@@ -58,10 +60,18 @@ public class SampleControllerTest {
                 .andDo(print());
     }
 
+    @Test
     public void event() throws Exception {
         mockMvc.perform(get("/events/form"))
                 .andExpect(view().name("/events/form"))
                 .andExpect(model().attributeExists("event"))
+                .andDo(print());
+    }
+
+    @Test
+    public void setSession() throws Exception {
+        mockMvc.perform(get("/session"))
+                .andExpect(MockMvcResultMatchers.request().sessionAttribute("event","setEvent"))
                 .andDo(print());
     }
 }

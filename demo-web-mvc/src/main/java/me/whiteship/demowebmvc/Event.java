@@ -1,7 +1,17 @@
 package me.whiteship.demowebmvc;
 
+import javax.validation.constraints.Min;
+import javax.validation.constraints.NotBlank;
+
 public class Event {
+
+    interface Validatelimit {}
+    interface ValidateName {}
+
+    @NotBlank(groups = ValidateName.class)
     private String name;
+
+    @Min(value = 0, groups = Validatelimit.class)
     private Integer limit;
 
     public String getName() {
