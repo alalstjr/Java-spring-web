@@ -41,9 +41,4 @@ public class SampleController {
     public String helloCustom() {
         return "helloCustom";
     }
-
-    @GetMapping("/hello/{id}?name=jjunpro")
-    public Event getEvent(@RequestParam(name = "name",required = false, defaultValue = "hello") String nameObject) {
-
-    }
 }

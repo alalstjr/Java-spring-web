@@ -42,6 +42,7 @@
 - [23. 핸들러 메소드 아규먼트와 리턴 타입](#핸들러-메소드-아규먼트와-리턴-타입)
 - [24. 핸들러 메소드 URI 패턴](#핸들러-메소드-URI-패턴)
 - [25. 핸들러 메소드 @RequestMapping](#핸들러-메소드-@RequestMapping)
+- [26. 폼 서브밋 (타임리프)](#폼-서브밋-(타임리프))
 
 # 스프링 MVC
 
@@ -2196,3 +2197,84 @@ public Event getEvent(@RequestParam(name = "name",required = false, defaultValue
 
 - 참고
   - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-requestparam
+
+# 폼 서브밋 (타임리프)
+
+- ${...} : Variable expressions.
+- *{...} : Selection expressions.
+- #{...} : Message (i18n) expressions.
+- @{...} : Link (URL) expressions.
+- ~{...} : Fragment expressions.
+
+- 참고
+  - https://www.thymeleaf.org/doc/articles/standarddialect5minutes.html
+  - https://www.getpostman.com/downloads/
+
+> form.html
+
+~~~
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Title</title>
+</head>
+<body>
+  <form action="#" th:action="@{/templates/events}" method="post" th:object="${event}">
+    <input type="text" title="name" th:field="*{name}">
+    <input type="text" title="limit" th:field="*{limit}">
+    <button type="submit">Create</button>
+  </form>
+</body>
+</html>
+~~~
+
+> Event.class
+
+~~~
+public class Event {
+    private String name;
+    private Integer limit;
+}
+~~~
+
+> EventController.class
+
+~~~
+@Controller
+public class EventController {
+
+    @PostMapping("/events")
+    @ResponseBody
+    public Event getEvent(
+            @RequestParam String name,
+            @RequestParam Integer limit
+    ) {
+        Event event = new Event();
+        event.setName(name);
+        event.setLimit(limit);
+
+        return event;
+    }
+
+    @GetMapping("/events/form")
+    public String eventsForm(Model model) {
+        Event event = new Event();
+        event.setLimit(50);
+        model.addAttribute("event", event);
+
+        return "events/form";
+    }
+}
+~~~
+
+> Test.class
+
+~~~
+public void event() throws Exception {
+    mockMvc.perform(get("/events/form"))
+            .andExpect(view().name("/events/form"))
+            .andExpect(model().attributeExists("event"))
+            .andDo(print());
+}
+~~~

@@ -6,7 +6,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.handler;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
@@ -53,6 +55,13 @@ public class SampleControllerTest {
     public void helloCustom() throws Exception {
         mockMvc.perform(get("/helloCustom"))
                 .andExpect(status().isOk())
+                .andDo(print());
+    }
+
+    public void event() throws Exception {
+        mockMvc.perform(get("/events/form"))
+                .andExpect(view().name("/events/form"))
+                .andExpect(model().attributeExists("event"))
                 .andDo(print());
     }
 }
