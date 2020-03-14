@@ -47,6 +47,8 @@
 - [28. 핸들러 메소드 @Validated](#핸들러-메소드-@Validated)
   - [1. 핸들러 메소드 폼 서브밋 (에러 처리)](#핸들러-메소드-폼-서브밋-(에러-처리))
 - [29. 핸들러 메소드 @SessionAttributes](#핸들러-메소드-@SessionAttributes)
+- [30. 핸들러 메소드 멀티 폼 서브밋](#핸들러-메소드-멀티-폼-서브밋)
+- [31. 핸들러 메소드 @SessionAttribute](#핸들러-메소드-@SessionAttribute)
 
 # 스프링 MVC
 
@@ -2402,5 +2404,187 @@ public class EventController {
 
       return "events/form";
   }
+}
+~~~
+
+# 핸들러 메소드 멀티 폼 서브밋
+
+- 세션을 사용해서 여러 폼에 걸쳐 데이터를 나눠 입력 받고 저장하기
+  - 이벤트 이름 입력받고
+  - 이벤트 제한 인원 입력받고
+  - 서브밋 -> 이벤트 목록으로!
+- 완료된 경우에 세션에서 모델 객체 제거하기
+  - SessionStatus
+
+~~~
+@Controller
+@SessionAttributes("event")
+public class EventController {
+
+    @GetMapping("/events/list")
+    public String getEvents(Model model) {
+        Event event = new Event();
+        event.setName("spring");
+        event.setLimit(10);
+
+        ArrayList<Event> events = new ArrayList<>();
+        events.add(event);
+
+        model.addAttribute(events);
+
+        return "/events/list";
+    }
+
+    @GetMapping("/events/form/name")
+    public String eventFormName(Model model) {
+        /* 어노테이션 @SessionAttributes("event") 선언으로 인해서 Session 에 event 객체가 저장됩니다. */
+        model.addAttribute("event", new Event());
+
+        return "events/form-name";
+    }
+
+    @PostMapping("/events/form/name")
+    public String eventFormNameSubmit(
+            @Valid @ModelAttribute Event event,
+            BindingResult bindingResult
+    ) {
+        if(bindingResult.hasErrors()) {
+            return "events/form-name";
+        }
+
+        return "redirect:/events/form/limit";
+    }
+
+    /* @ModelAttribute 어노테이션으로 세션에 저장된 Event 객체를 가져옵니다. */
+    @GetMapping("/events/form/limit")
+    public String eventFormLimit(@ModelAttribute Event event, Model model) {
+        model.addAttribute("event", event);
+
+        return "events/form-limit";
+    }
+
+    @PostMapping("/events/form/limit")
+    public String eventFormLimitSubmit(
+            @Valid @ModelAttribute Event event,
+            BindingResult bindingResult,
+            SessionStatus sessionStatus
+    ) {
+        if(bindingResult.hasErrors()) {
+            return "events/form-limit";
+        }
+
+        sessionStatus.isComplete();
+
+        return "redirect:/events/list";
+    }
+}
+~~~
+
+> list.html
+
+~~~
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Title</title>
+</head>
+<body>
+  <a th:href="@{/events/form/name}">Create new event</a>
+  <div th:unless="${#lists.isEmpty(eventList)}">
+    <ul th:each="event: ${eventList}">
+      <li th:text="${event.name}">Event name</li>
+    </ul>
+  </div>
+</body>
+</html>
+~~~
+
+> form-name.html
+
+~~~
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Title</title>
+</head>
+<body>
+  <form action="#" th:action="@{/events/form/name}" method="post" th:object="${event}">
+    <p th:if="${#fields.hasErrors('name')}" th:errors="*{name}">error</p>
+    name : <input type="text" title="name" th:field="*{name}">
+    <button type="submit">Create</button>
+  </form>
+</body>
+</html>
+~~~
+
+> form-limit.html
+
+~~~
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Title</title>
+</head>
+<body>
+  <form action="#" th:action="@{/events/form/limit}" method="post" th:object="${event}">
+    <p th:if="${#fields.hasErrors('limit')}" th:errors="*{limit}">error</p>
+    limit : <input type="text" title="limit" th:field="*{limit}">
+    <button type="submit">Create</button>
+  </form>
+</body>
+</html>
+~~~
+
+# 핸들러 메소드 @SessionAttribute
+
+- HTTP 세션에 들어있는 값 참조할 때 사용
+  - HttpSession을 사용할 때 비해 타입 컨버전을 자동으로 지원하기 때문에 조금 편리함.
+  - HTTP 세션에 데이터를 넣고 빼고 싶은 경우에는 HttpSession을 사용할 것.
+- @SessionAttributes와는 다르다.
+  - @SessionAttributes는 해당 컨트롤러 내에서만 동작.
+    - 즉, 해당 컨트롤러 안에서 다루는 특정 모델 객체를 세션에 넣고 공유할 때 사용.
+  - @SessionAttribute는 컨트롤러 밖(인터셉터 또는 필터 등)에서 만들어 준 세션 데이터에 접근할 때 사용한다.
+
+> VisitTimeIntercepter.class
+
+~~~
+public class VisitTimeIntercepter implements HandlerInterceptor {
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
+            Object handler) throws Exception {
+        HttpSession session = request.getSession();
+        if(session.getAttribute("visitTime") == null) {
+            session.setAttribute("visitTime", LocalDateTime.now());
+        }
+
+        return true;
+    }
+}
+~~~
+
+> WebConfig.class
+
+~~~
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new VisitTimeIntercepter());
+    }
+}
+~~~
+
+> Controller.class
+
+~~~
+public String eventFormLimitSubmit(
+        @SessionAttribute LocalDateTime visitTime
+) {
+  ...
 }
 ~~~

@@ -30,11 +30,13 @@ public class SampleController {
         return "helloAll";
     }
 
+    /*
     @GetMapping(value = "/header", headers = HttpHeaders.FROM + "=" + "111")
     @RequestMapping
     public String helloHeader() {
         return "helloheader";
     }
+    */
 
     @GetHelloMapping
     @ResponseBody
