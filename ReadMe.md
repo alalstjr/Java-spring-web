@@ -49,6 +49,7 @@
 - [29. 핸들러 메소드 @SessionAttributes](#핸들러-메소드-@SessionAttributes)
 - [30. 핸들러 메소드 멀티 폼 서브밋](#핸들러-메소드-멀티-폼-서브밋)
 - [31. 핸들러 메소드 @SessionAttribute](#핸들러-메소드-@SessionAttribute)
+- [32. 핸들러 메소드 RedirectAttributes](#핸들러-메소드-RedirectAttributes)
 
 # 스프링 MVC
 
@@ -2586,5 +2587,78 @@ public String eventFormLimitSubmit(
         @SessionAttribute LocalDateTime visitTime
 ) {
   ...
+}
+~~~
+
+# 핸들러 메소드 RedirectAttributes
+
+- 리다이렉트 할 때 기본적으로 Model에 들어있는 primitive type 데이터는 URI 쿼리 매개변수에 추가된다.
+  - 스프링 부트에서는 이 기능이 기본적으로 비활성화 되어 있다.
+  - Ignore-default-model-on-redirect 프로퍼티를 사용해서 활성화 할 수 있다.
+
+- 원하는 값만 리다이렉트 할 때 전달하고 싶다면 RedirectAttributes에 명시적으로 추가할 수 있다.
+
+- 리다이렉트 요청을 처리하는 곳에서 쿼리 매개변수를 @RequestParam 또는 @ModelAttribute로 받을 수 있다.
+
+~~~
+@PostMapping("/events/form/limit")
+public String eventFormLimitSubmit(
+        @Valid @ModelAttribute Event event,
+        Model model
+) {
+    model.addAttribute("name", event.getName());
+    model.addAttribute("limit", event.getLimit());
+
+    return "redirect:/events/list";
+}
+~~~
+
+model 로 전송하게 되면 redirect 주소에는 `/events/list?name=jjunpro&limit=10` 이런식으로 붙게됩니다.
+Spring Web MVC 에서는 기본적으로 적용이 되지만 `Boot 에서는 적용되지 않도록 기본설정`이 되어있습니다.
+이러한 설정의 위치는 `WebMvcAutoConfiguration.class requestMappingHandlerAdapter() 메소드의 isIgnoreDefaultModelOnRedirect 디폴트 값이 true` 로 되어있습니다.
+
+> application.properties
+
+~~~
+spring.mvc.ignore-default-model-on-redirect=false
+~~~
+
+아니면 명시적으로 특정 값만 참조하려면 RedirectAttributes 를 사용합니다.
+
+~~~
+@PostMapping("/events/form/limit")
+public String eventFormLimitSubmit(
+        @Valid @ModelAttribute Event event,
+        RedirectAttributes attributes
+) {
+    attributes.addAttribute("name", event.getName());
+    attributes.addAttribute("limit", event.getLimit());
+
+    return "redirect:/events/list";
+}
+
+/* 멀티 폼 서브밋 */
+@GetMapping("/events/list")
+public String getEvents(
+        @RequestParam String name,
+        @RequestParam Integer limit,
+        Model model
+) {
+    Event event = new Event();
+    event.setName("spring");
+    event.setLimit(10);
+
+    Event newEvent = new Event();
+    event.setName(name);
+    event.setLimit(limit);
+
+    ArrayList<Event> events = new ArrayList<>();
+    events.add(event);
+    events.add(newEvent
+    );
+
+    model.addAttribute(events);
+
+    return "/events/list";
 }
 ~~~
