@@ -74,4 +74,15 @@ public class SampleControllerTest {
                 .andExpect(MockMvcResultMatchers.request().sessionAttribute("event","setEvent"))
                 .andDo(print());
     }
+
+    @Test
+    public void redirectAttributes() throws Exception {
+        Event event = new Event();
+        event.setName("jjunpro");
+        event.setLimit(10);
+
+        mockMvc.perform(get("/event/list").flashAttr("event",event))
+                .andExpect(MockMvcResultMatchers.request().sessionAttribute("event","setEvent"))
+                .andDo(print());
+    }
 }

@@ -40,16 +40,17 @@
 - [22. HTTP 요청 맵핑하기 HEAD와 OPTIONS 요청 처리](#HTTP-요청-맵핑하기-HEAD와-OPTIONS-요청-처리)
 - [22. 요청 맵핑하기 커스텀 애노테이션](#요청-맵핑하기-커스텀-애노테이션)
 - [23. 핸들러 메소드 아규먼트와 리턴 타입](#핸들러-메소드-아규먼트와-리턴-타입)
-- [24. 핸들러 메소드 URI 패턴](#핸들러-메소드-URI-패턴)
-- [25. 핸들러 메소드 @RequestMapping](#핸들러-메소드-@RequestMapping)
+- [24. URI 패턴](#핸들러-메소드-URI-패턴)
+- [25. @RequestMapping](#핸들러-메소드-@RequestMapping)
 - [26. 폼 서브밋 (타임리프)](#폼-서브밋-(타임리프))
-- [27. 핸들러 메소드 @ModelAttribute](#핸들러-메소드-@ModelAttribute)
-- [28. 핸들러 메소드 @Validated](#핸들러-메소드-@Validated)
-  - [1. 핸들러 메소드 폼 서브밋 (에러 처리)](#핸들러-메소드-폼-서브밋-(에러-처리))
-- [29. 핸들러 메소드 @SessionAttributes](#핸들러-메소드-@SessionAttributes)
-- [30. 핸들러 메소드 멀티 폼 서브밋](#핸들러-메소드-멀티-폼-서브밋)
-- [31. 핸들러 메소드 @SessionAttribute](#핸들러-메소드-@SessionAttribute)
-- [32. 핸들러 메소드 RedirectAttributes](#핸들러-메소드-RedirectAttributes)
+- [27. @ModelAttribute](#핸들러-메소드-@ModelAttribute)
+- [28. @Validated](#핸들러-메소드-@Validated)
+  - [1. 폼 서브밋 (에러 처리)](#핸들러-메소드-폼-서브밋-(에러-처리))
+- [29. @SessionAttributes](#핸들러-메소드-@SessionAttributes)
+- [30. 멀티 폼 서브밋](#핸들러-메소드-멀티-폼-서브밋)
+- [31. @SessionAttribute](#핸들러-메소드-@SessionAttribute)
+- [32. RedirectAttributes](#핸들러-메소드-RedirectAttributes)
+- [33. Flash Attributes](#핸들러-메소드-Flash-Attributes)
 
 # 스프링 MVC
 
@@ -2660,5 +2661,58 @@ public String getEvents(
     model.addAttribute(events);
 
     return "/events/list";
+}
+~~~
+
+# 핸들러 메소드 Flash Attributes
+
+- 주로 리다이렉트시에 데이터를 전달할 때 사용한다.
+  - 데이터가 URI에 노출되지 않는다.
+  - 임의의 객체를 저장할 수 있다.
+  - 보통 HTTP 세션을 사용한다.
+- 리다이렉트 하기 전에 데이터를 HTTP 세션에 저장하고 리다이렉트 요청을 처리 한 다음 그 즉시 제거한다.
+
+- RedirectAttributes를 통해 사용할 수 있다.
+
+- XPath
+  - https://www.w3schools.com/xml/xpath_syntax.asp
+  - https://www.freeformatter.com/xpath-tester.html#ad-output
+
+~~~
+@PostMapping("/events/form/limit")
+public String eventFormLimitSubmit(
+        @Valid @ModelAttribute Event event,
+        RedirectAttributes attributes
+) {
+    attributes.addFlashAttribute("newEvent", event);
+}
+~~~
+
+@ModelAttribute 로 잡지않아도 기본으로 Model 값을 사용해도 됩니다.
+
+~~~
+@GetMapping("/events/list")
+public String getEvents(
+        Model model
+) {
+  ArrayList<Event> events = new ArrayList<>();
+  events.add(newEvent);
+
+  model.addAttribute(events);
+
+  return "/events/list";
+}
+~~~
+
+> Test.class
+
+~~~
+@Test
+public void redirectAttributes() throws Exception {
+    Event event = new Event();
+    event.setName("jjunpro");
+    event.setLimit(10);
+
+    mockMvc.perform(get("/event/list").flashAttr("event",event))...
 }
 ~~~

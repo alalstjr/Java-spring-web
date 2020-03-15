@@ -108,8 +108,10 @@ public class EventController {
             return "events/form-limit";
         }
 
-        attributes.addAttribute("name", event.getName());
-        attributes.addAttribute("limit", event.getLimit());
+        //        attributes.addAttribute("name", event.getName());
+        //        attributes.addAttribute("limit", event.getLimit());
+        attributes.addFlashAttribute("newEvent", event);
+
         /*
          * model 로 전송하게 되면 redirect 주소에는 /events/list?name=jjunpro&limit=10 이런식으로 붙게됩니다.
          * Spring Web MVC 에서는 기본적으로 적용이 되지만 Boot 에서는 적용되지 않도록 기본설정이 되어있습니다.
