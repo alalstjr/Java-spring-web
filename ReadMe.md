@@ -55,6 +55,7 @@
 - [35. 코드분석](#코드분석)
 - [36. 모델 @ModelAttribute](#모델-@ModelAttribute)
 - [37. 데이터 바인더 @InitBinder](#데이터-바인더-@InitBinder)
+- [38. 예외 처리 핸들러 @ExceptionHandler](#예외-처리-핸들러-@ExceptionHandler)
 
 # 스프링 MVC
 
@@ -2972,3 +2973,67 @@ public void initPetBinder(WebDataBinder dataBinder) {
 - 참고
   - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-initbinder
   - https://github.com/spring-projects/spring-petclinic/blob/master/src/main/java/org/springframework/samples/petclinic/owner/PetController.java
+
+# 예외 처리 핸들러 @ExceptionHandler
+
+- 특정 예외가 발생한 요청을 처리하는 핸들러 정의
+  - 지원하는 메소드 아규먼트 (해당 예외 객체, 핸들러 객체, ...)
+  - 지원하는 리턴 값
+  - REST API의 경우 응답 본문에 에러에 대한 정보를 담아주고, 상태 코드를 설정하려면 ResponseEntity를 주로 사용한다.
+
+- 참고
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-exceptionhandler
+
+언체크드 인셉션이므로 에러를 던지기만 하면 됩니다.
+
+> Controller.class
+
+~~~
+@ExceptionHandler
+public String eventErrorHandler(EventException exception, Model model) {
+    model.addAttribute("message", "event error");
+    return "error";
+}
+
+@GetMapping("/events/form/{name}")
+public String eventsForm() {
+    throw new EventException();
+    
+}
+~~~
+
+> error.html
+
+~~~
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Title</title>
+</head>
+<body>
+  <div th:if="${message}">
+    <h2 th:text="${message}"/>
+  </div>
+</body>
+</html>
+~~~
+
+만약 EventException, RuntimeException 둘다 받는 경우
+
+~~~
+@ExceptionHandler({EventException.class, RuntimeException.class})
+public String eventErrorHandler(RuntimeException exception, Model model) {
+    model.addAttribute("message", "event error");
+    return "error";
+}
+~~~
+
+REST API의 경우
+
+~~~
+@ExceptionHandler()
+public ResponseEntity eventErrorHandler2() {
+    return ResponseEntity.badRequest().body("error");
+}
+~~~
