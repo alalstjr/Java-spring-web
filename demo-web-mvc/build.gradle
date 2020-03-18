@@ -19,6 +19,7 @@ dependencies {
         exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
     }
     implementation 'junit:junit:4.12'
+    compile group: 'org.apache.tika', name: 'tika-core', version: '1.23'
 }
 
 test {

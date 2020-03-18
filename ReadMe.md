@@ -51,6 +51,7 @@
 - [31. @SessionAttribute](#핸들러-메소드-@SessionAttribute)
 - [32. RedirectAttributes](#핸들러-메소드-RedirectAttributes)
 - [33. Flash Attributes](#핸들러-메소드-Flash-Attributes)
+- [34. @RequestBody & HttpEntity](#핸들러-메소드-@RequestBody-&-HttpEntity)
 
 # 스프링 MVC
 
@@ -2716,3 +2717,145 @@ public void redirectAttributes() throws Exception {
     mockMvc.perform(get("/event/list").flashAttr("event",event))...
 }
 ~~~
+
+# 핸들러 메소드 MultipartFile
+
+- MultipartFile
+  - 파일 업로드시 사용하는 메소드 아규먼트
+  - MultipartResolver 빈이 설정 되어 있어야 사용할 수 있다. (스프링 부트 자동 설정이 해 줌)
+  - POST multipart/form-data 요청에 들어있는 파일을 참조할 수 있다.
+  - List<MultipartFile> 아큐먼트로 여러 파일을 참조할 수도 있다.
+
+- 파일 업로드 폼
+
+~~~
+<form method="POST" enctype="multipart/form-data" action="#" th:action="@{/file}">
+  File: <input type="file" name="file"/>
+  <input type="submit" value="Upload"/>
+</form>
+~~~
+
+- 파일 업로드 처리 핸들러
+
+@PostMapping("/file")
+public String uploadFile(
+  @RequestParam MultipartFile file,
+  RedirectAttributes attributes
+) {
+  String message = file.getOriginalFilename() + " is uploaded.";
+  System.out.println(message);
+  attributes.addFlashAttribute("message", message);
+  return "redirect:/events/list";
+}
+
+- 메시지 출력
+
+~~~
+<div th:if="${message}">
+  <h2 th:text="${message}"/>
+</div>
+~~~
+
+- 파일 업로드 관련 스프링 부트 설정
+  - MultipartAutoConfiguration
+  - MultipartProperties
+
+- 참고
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-multipart-forms
+  - https://spring.io/guides/gs/uploading-files/
+
+> Test.class
+
+~~~
+@Test
+public void uploadFile() throws Exception {
+    MockMultipartFile multipartFile = new MockMultipartFile(
+            "file",
+            "text.txt",
+            "text/plain",
+            "hello file".getBytes()
+    );
+
+    mockMvc.perform(multipart("/file").file(multipartFile))
+            .andExpect(status().is3xxRedirection());
+}
+~~~
+
+# 핸들러 메소드 파일 다운로드
+
+- 파일 리소스를 읽어오는 방법
+  - 스프링 ResourceLoader 사용하기
+- 파일 다운로드 응답 헤더에 설정할 내용
+  - Content-Disposition: 사용자가 해당 파일을 받을 때 사용할 파일 이름
+  - Content-Type: 어떤 파일인가
+  - Content-Length: 얼마나 큰 파일인가
+- 파일의 종류(미디어 타입) 알아내는 방법
+  - http://tika.apache.org/
+- ResponseEntity
+  - 응답 상태 코드
+  - 응답 헤더
+  - 응답 본문
+
+~~~
+    @GetMapping("/file/{filename}")
+    public ResponseEntity fileDownload(@PathVariable String filename) throws IOException {
+        Resource resource = resourceLoader.getResource("classpath:" + filename);
+
+        File   file = resource.getFile();
+        Tika   tika = new Tika();
+        String type = tika.detect(file);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachement; filename=\"" +
+                        resource.getFilename() + "\"")
+                .header(HttpHeaders.CONTENT_TYPE, type)
+                .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(file.length()))
+                .body(resource);
+    }
+~~~
+
+- 참고
+  - https://spring.io/guides/gs/uploading-files/
+  - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition
+  - https://www.baeldung.com/java-file-mime-type
+
+# 핸들러 메소드 @RequestBody & HttpEntity
+
+- @RequestBody
+  - 요청 본문(body)에 들어있는 데이터를 HttpMessageConveter를 통해 변환한 객체로 받아올 수 있다.
+  - @Valid 또는 @Validated를 사용해서 값을 검증 할 수 있다.
+  - BindingResult 아규먼트를 사용해 코드로 바인딩 또는 검증 에러를 확인할 수 있다.  
+
+~~~
+@PostMapping("/api")
+public Event api(@RequestBody Event event) {
+    return event;
+}
+~~~
+
+body 정보만 불러올 수 있습니다. Header 정보에는 접근할 수 없습니다.
+
+- HttpMessageConverter
+  - 스프링 MVC 설정 (WebMvcConfigurer)에서 설정할 수 있다.
+  - configureMessageConverters: 기본 메시지 컨버터 대체
+  - extendMessageConverters: 메시지 컨버터에 추가
+  - 기본 컨버터
+    - WebMvcConfigurationSupport.addDefaultHttpMessageConverters
+
+- HttpEntity
+  - @RequestBody와 비슷하지만 추가적으로 요청 헤더 정보를 사용할 수 있다.
+
+~~~
+@PostMapping("/api")
+public Event api(HttpEntity<Event> event) {
+    MediaType contentType = event.getHeaders().getContentType();
+    return event.getBody();
+}
+~~~
+
+RequestBody 대신 HttpEntity를 사용하면 @Valid를 사용 하지 못합니다.
+@Valid는 자바빈 스팩을 준수하는 객체만 검증이 가능합니다. 그래서 @RequestBody를 사용한 객체가 그 스팩을 준수해야 하며, HttpEntity는 그런 용도가 아니기 때문에 @Valid가 지원하지 못합니다.
+
+- 참고
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-requestbody
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-httpentity
