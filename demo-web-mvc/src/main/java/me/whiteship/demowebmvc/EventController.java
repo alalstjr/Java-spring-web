@@ -25,12 +25,6 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @SessionAttributes("event")
 public class EventController {
 
-    @PostMapping("/api")
-    public Event api(HttpEntity<Event> event) {
-        MediaType contentType = event.getHeaders().getContentType();
-        return event.getBody();
-    }
-
     @PostMapping("/events")
     @ResponseBody
     public Event getEvent(

@@ -52,6 +52,9 @@
 - [32. RedirectAttributes](#핸들러-메소드-RedirectAttributes)
 - [33. Flash Attributes](#핸들러-메소드-Flash-Attributes)
 - [34. @RequestBody & HttpEntity](#핸들러-메소드-@RequestBody-&-HttpEntity)
+- [35. 코드분석](#코드분석)
+- [36. 모델 @ModelAttribute](#모델-@ModelAttribute)
+- [37. 데이터 바인더 @InitBinder](#데이터-바인더-@InitBinder)
 
 # 스프링 MVC
 
@@ -2859,3 +2862,113 @@ RequestBody 대신 HttpEntity를 사용하면 @Valid를 사용 하지 못합니�
 - 참고
   - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-requestbody
   - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-httpentity
+
+# 핸들러 메소드 @ResponseBody & ResponseEntity
+
+- @ResponseBody
+  - 데이터를 HttpMessageConverter를 사용해 응답 본문 메시지로 보낼 때 사용한다.
+  - @RestController 사용시 자동으로 모든 핸들러 메소드에 적용 된다.
+- ResponseEntity
+  - 응답 헤더 상태 코드 본문을 직접 다루고 싶은 경우에 사용한다.
+- 참고
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-responsebody
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-responseentity
+
+~~~
+@ResponseBody
+public Hello hello() {
+    return "hello";
+}
+~~~
+
+@ResponseBody 를 붙이면 메소드에서 리턴하는 Hello 값을 `HttpMessageConverter`를 사용해서 응답 본문에 담아줍니다. 
+
+# 코드분석
+
+- 다루지 못한 내용
+  - @JsonView: https://www.youtube.com/watch?v=5QyXswB_Usg&t=188s
+  - PushBuidler: HTTP/2, 스프링 5
+- 과제
+  - 프로젝트 코드 분석
+  - https://github.com/spring-projects/spring-petclinic
+
+# 모델 @ModelAttribute
+
+- @ModelAttribute의 다른 용법
+  - @RequestMapping을 사용한 핸들러 메소드의 아규먼트에 사용하기 (이미 살펴 봤습니다.)
+  - @Controller 또는 @ControllerAdvice (이 애노테이션은 뒤에서 다룹니다.)를 사용한 클래스에서 모델 정보를 초기화 할 때 사용한다.
+  - @RequestMapping과 같이 사용하면 해당 메소드에서 리턴하는 객체를 모델에 넣어 준다.
+    - RequestToViewNameTranslator
+
+@ModelAttribute 메소드
+
+~~~
+@ModelAttribute
+public void subjects(Model model) {
+  model.addAttribute("subjects", List.of("study", "seminar", "hobby", "social"));
+}
+~~~
+
+~~~
+@ModelAttribute("types")
+public Collection<PetType> populatePetTypes() {
+  return this.pets.findPetTypes();
+}
+~~~
+
+펫의 종류를 모델에 담아주고 있습니다.
+
+- 간단 예제 
+- https://github.com/spring-projects/spring-petclinic/blob/master/src/main/java/org/springframework/samples/petclinic/owner/PetController.java
+
+# 데이터 바인더 @InitBinder
+
+- 특정 컨트롤러에서 바인딩 또는 검증 설정을 변경하고 싶을 때 사용
+- 모든 요청전에 InitBinder 메소드를 호출 할 수 있습니다.
+
+~~~
+@InitBinder
+public void initEventBinder(WebDataBinder webDataBinder) {
+  webDataBinder.setDisallowedFields("id");
+}
+~~~
+
+id 값은 이벤트를 저장할 때 사용하고 싶은 경우 
+
+- 바인딩 설정
+  - webDataBinder.setDisallowedFields();
+  - 받고싶지 않은 필드값을 설정할 수 있습니다.
+
+- 포매터 설정
+  - webDataBinder.addCustomFormatter();
+
+~~~
+public class Event {
+    @NotBlank(groups = ValidateName.class)
+    private String name;
+
+    @Min(value = 0, groups = Validatelimit.class)
+    private Integer limit;
+
+    @DateTimeFormat(iso = ISO.DATE)
+    private LocalDate startDate;
+}
+~~~
+
+Form 에서 date 값을 문자열로 받으면 자동으로 포멧을 변경하여 객체에 등록됩니다.
+
+- Validator 설정
+  - webDataBinder.addValidators();
+
+~~~
+@InitBinder("pet")
+public void initPetBinder(WebDataBinder dataBinder) {
+  dataBinder.setValidator(new PetValidator());
+}
+~~~
+
+- 특정 모델 객체에만 바인딩 또는 Validator 설정을 적용하고 싶은 경우
+  - @InitBinder(“event”)
+- 참고
+  - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-initbinder
+  - https://github.com/spring-projects/spring-petclinic/blob/master/src/main/java/org/springframework/samples/petclinic/owner/PetController.java
